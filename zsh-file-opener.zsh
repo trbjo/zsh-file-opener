@@ -18,10 +18,11 @@ if [[ $SSH_TTY ]]; then
         curl https://raw.githubusercontent.com/aurora/rmate/master/rmate > "$HOME/.local/bin/rmate"
         chmod +x "$HOME/.local/bin/rmate"
     fi
-    if [[ $commands[doas] ]]; then
-        root_cmd() { doas $(where rmate) "$@" }
-    elif [[ $commands[sudo] ]]; then
-        root_cmd() { sudo $(where rmate) "$@" }
+
+    if type doas > /dev/null 2>&1; then
+        root_cmd() { doas ${$(where rmate)[1]} "$@" }
+    elif type sudo > /dev/null 2>&1; then
+        root_cmd() { sudo ${$(where rmate)[1]} "$@" }
     else
         root_cmd() { echo "No root escalation command like sudo or doas found. Try su instead." }
     fi
