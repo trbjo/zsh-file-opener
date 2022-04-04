@@ -73,7 +73,7 @@ _file_opener() {
             fi
         fi
         if [[ -n $_OPEN_IN_TEXT_EDITOR ]]; then
-            docs+=("${file:a:q}")
+            docs+=("${file:A:q}")
             continue
         elif [[ -d ${file} ]]; then
             dirs+=("$file")
@@ -81,23 +81,23 @@ _file_opener() {
         else
             case "${file:e:l}" in
                 (${~_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})
-                    disabled+=("${file:a:q}") ;;
+                    disabled+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_ARCHIVE_FORMATS//,/|})
                     arcs+=(${file:a})
                     [[ "${#@}" -eq 2 ]] && { local explicit_extract_location="$2"; break } ;;
                 (${~_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS//,/|})
-                    swaymsg -q '[app_id=mpv] focus' || movs+=("${file:a:q}") ;;
+                    swaymsg -q '[app_id=mpv] focus' || movs+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_BOOK_FORMATS//,/|})
-                    swaymsg -q "[app_id=\"^org.pwmt.zathura$\" title=\"^${(q)file##*/}\ \[\"] focus" || pdfs+=("${file:a:q}") ;;
+                    swaymsg -q "[app_id=\"^org.pwmt.zathura$\" title=\"^${(q)file##*/}\ \[\"] focus" || pdfs+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_PICTURE_FORMATS//,/|})
-                    pics+=("${file:a:q}") ;;
+                    pics+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_WEB_FORMATS//,/|})
-                    webs+=("${file:a:q}") ;;
+                    webs+=("${file:A:q}") ;;
                 (ipynb)
-                    vscode+=("${file:a:q}") ;;
+                    vscode+=("${file:A:q}") ;;
                 (*)
-                    [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:a:q}":$2) && break
-                    docs+=("${file:a:q}") ;;
+                    [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:A:q}":$2) && break
+                    docs+=("${file:A:q}") ;;
             esac
         fi
     done
