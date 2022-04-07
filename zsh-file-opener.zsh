@@ -142,7 +142,7 @@ _file_opener() {
         for msg in ${extract_msg[@]}; do
             print "$msg"
         done
-    } < $TTY || [[ ${ret} ]] || swaymsg -q -- [app_id=^PopUp$] move scratchpad > /dev/null 2>&1
+    } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
     [[ ${movs} ]] && {
         if [[ -e /sys/class/power_supply/AC*/online ]]; then
