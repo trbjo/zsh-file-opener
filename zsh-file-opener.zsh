@@ -30,9 +30,9 @@ if [[ $SSH_TTY ]]; then
     _docs_opener() {
         for doc in ${docs[@]}; do
             if [[ -w "${${doc:a}%/*}" ]]; then
-                rmate "$doc"
+                rmate ${(Q)doc}
             else
-                root_cmd "$doc"
+                root_cmd ${(Q)doc}
             fi
         done
     }
