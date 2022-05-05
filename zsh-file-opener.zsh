@@ -89,7 +89,7 @@ _file_opener() {
                     arcs+=(${file:a})
                     [[ "${#@}" -eq 2 ]] && { local explicit_extract_location="$2"; break } ;;
                 (${~_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS//,/|})
-                    swaymsg -q '[app_id=mpv] focus' || movs+=("${file:A:q}") ;;
+                    movs+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_BOOK_FORMATS//,/|})
                     swaymsg -q "[app_id=\"^org.pwmt.zathura$\" title=\"^${(q)file##*/}\ \[\"] focus" || pdfs+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_PICTURE_FORMATS//,/|})
@@ -148,20 +148,28 @@ _file_opener() {
     } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
     [[ ${movs} ]] && {
-        case "$(aplay -l)" in
-        *": BT700 ["*)
-            local audio='--audio-device=alsa/iec958:CARD=BT700,DEV=0'
-            ;;
-         *": Audio ["*)
-            local audio='--audio-device=alsa/default:CARD=Audio'
-            ;;
-        esac
-
-        if grep -q 'enabled' /sys/class/drm/card0-eDP-1/enabled && grep -q 'enabled' /sys/class/drm/{card0-DP-1,card0-DP-2,card0-HDMI-A-1}/enabled; then
-            swaymsg -q output eDP-1 disable
-            swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs} \; grep -q open /proc/acpi/button/lid/LID/state \&\& swaymsg output eDP-1 enable\'
+        if swaymsg -q '[app_id=^mpv$] focus'; then
+            [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1
+            for movie in ${movs[@]}; do
+                print "loadfile ${(q)movie} append-play" | socat - /tmp/mpvsocket
+                notify-send.sh "${movie##*/}" "Playing next…"
+            done
         else
-            swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs}\'
+            case "$(aplay -l)" in
+            *": BT700 ["*)
+                local audio='--audio-device=alsa/iec958:CARD=BT700,DEV=0'
+                ;;
+             *": Audio ["*)
+                local audio='--audio-device=alsa/default:CARD=Audio'
+                ;;
+            esac
+
+            if grep -q 'enabled' /sys/class/drm/card0-eDP-1/enabled && grep -q 'enabled' /sys/class/drm/{card0-DP-1,card0-DP-2,card0-HDMI-A-1}/enabled; then
+                swaymsg -q output eDP-1 disable
+                swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs} \; grep -q open /proc/acpi/button/lid/LID/state \&\& swaymsg output eDP-1 enable\'
+            else
+                swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs}\'
+            fi
         fi
     }
 
