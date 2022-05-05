@@ -149,10 +149,10 @@ _file_opener() {
 
     [[ ${movs} ]] && {
         case "$(aplay -l)" in
-         *BT700*)
+        *": BT700 ["*)
             local audio='--audio-device=alsa/iec958:CARD=BT700,DEV=0'
             ;;
-         *Audio*)
+         *": Audio ["*)
             local audio='--audio-device=alsa/default:CARD=Audio'
             ;;
         esac
