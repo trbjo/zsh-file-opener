@@ -148,11 +148,11 @@ _file_opener() {
     } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
     [[ ${movs} ]] && {
-        if swaymsg -q '[app_id=^mpv$] focus'; then
+        if pgrep -x mpv; then
             [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1
             for movie in ${movs[@]}; do
-                print "loadfile ${(q)movie} append-play" | socat - /tmp/mpvsocket
-                notify-send.sh "${movie##*/}" "Playing next…"
+                print "loadfile ${(qq)movie} append" | socat - /tmp/mpvsocket
+                notify-send.sh "${movie##*/}" "Playing next…" --default-action="swaymsg -q '[app_id=^mpv$] focus'"
             done
         else
             case "$(aplay -l)" in
