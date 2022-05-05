@@ -148,7 +148,7 @@ _file_opener() {
     } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
     [[ ${movs} ]] && {
-        if pgrep -x mpv; then
+        if pgrep -x mpv /dev/null 2>&1; then
             [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1
             for movie in ${movs[@]}; do
                 print "loadfile ${(qq)movie} append" | socat - /tmp/mpvsocket
