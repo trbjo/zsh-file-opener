@@ -38,7 +38,10 @@ if [[ $SSH_TTY ]]; then
     }
 else
     alias -g SS=' |& subl -'
-    _docs_opener() { swaymsg -q -- exec \'/opt/sublime_text/sublime_text ${docs}\' \; [app_id=^sublime_text$] focus }
+    _docs_opener() {
+        swaymsg -q -- [app_id=^sublime_text$] focus, exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
+        swaymsg -q -- exec /opt/sublime_text/sublime_text, exec \'/opt/sublime_text/sublime_text ${docs}\'
+    }
 fi
 
 _file_opener() {
@@ -145,21 +148,28 @@ _file_opener() {
     } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
     [[ ${movs} ]] && {
-        if [[ -e /sys/class/power_supply/AC*/online ]]; then
-            grep -q 'enabled' /sys/class/drm/{card0-DP-1,card0-DP-2,card0-HDMI-A-1}/enabled\
-            && read batstatus < /sys/class/power_supply/AC*/online && [[ 0 == $batstatus ]]\
-            && swaymsg -q output eDP-1 dpms off
+        case "$(aplay -l)" in
+         *BT700*)
+            local audio='--audio-device=alsa/iec958:CARD=BT700,DEV=0'
+            ;;
+         *Audio*)
+            local audio='--audio-device=alsa/default:CARD=Audio'
+            ;;
+        esac
+
+        if grep -q 'enabled' /sys/class/drm/card0-eDP-1/enabled && grep -q 'enabled' /sys/class/drm/{card0-DP-1,card0-DP-2,card0-HDMI-A-1}/enabled; then
+            swaymsg -q output eDP-1 disable
+            swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs} \; grep -q open /proc/acpi/button/lid/LID/state && swaymsg output eDP-1 enable\'
+        else
+            swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs}\'
         fi
-        swaymsg -q -- exec \'/usr/bin/mpv --player-operation-mode=pseudo-gui ${movs} \; swaymsg output eDP-1 dpms on\'
     }
+
     [[ ${pdfs} ]] && swaymsg -q -- exec \'/usr/bin/zathura ${pdfs}\'
 
-    [[ ${pics} ]] && {
-        [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
-        swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
-    }
+    [[ ${pics} ]] && swaymsg -q -- exec \'/usr/bin/eog ${pics}\'
 
-    [[ ${vscode} ]] && swaymsg -q -- exec \'electron13 /usr/lib/code/out/cli.js /usr/lib/code/code.js --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
+    [[ ${vscode} ]] && swaymsg -q -- exec \'electron17 /usr/lib/code/out/cli.js /usr/lib/code/code.js --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
 
     [[ ${docs} ]] && _docs_opener ${docs}
 
