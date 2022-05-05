@@ -159,7 +159,7 @@ _file_opener() {
 
         if grep -q 'enabled' /sys/class/drm/card0-eDP-1/enabled && grep -q 'enabled' /sys/class/drm/{card0-DP-1,card0-DP-2,card0-HDMI-A-1}/enabled; then
             swaymsg -q output eDP-1 disable
-            swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs} \; grep -q open /proc/acpi/button/lid/LID/state && swaymsg output eDP-1 enable\'
+            swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs} \; grep -q open /proc/acpi/button/lid/LID/state \&\& swaymsg output eDP-1 enable\'
         else
             swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs}\'
         fi
