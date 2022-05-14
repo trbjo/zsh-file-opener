@@ -204,7 +204,7 @@ bindkey -e " " file_opener_helper
 
 remove_completion_insert_slash() {
     if [[ -z "$BUFFER" ]]; then
-        LBUFFER+="$_ZSH_FILE_OPENER_CMD /"
+        LBUFFER+="/"
         zle expand-or-complete
     elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${+_did_complete} )) && (( ${#BUFFER} == 2 )); then
         unset _did_complete
