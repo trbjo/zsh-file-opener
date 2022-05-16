@@ -175,7 +175,10 @@ _file_opener() {
 
     [[ ${pdfs} ]] && swaymsg -q -- exec \'/usr/bin/zathura ${pdfs}\'
 
-    [[ ${pics} ]] && swaymsg -q -- exec \'/usr/bin/eog ${pics}\'
+    [[ ${pics} ]] && {
+        [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
+        swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
+    }
 
     [[ ${vscode} ]] && swaymsg -q -- exec \'electron17 /usr/lib/code/out/cli.js /usr/lib/code/code.js --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
 
