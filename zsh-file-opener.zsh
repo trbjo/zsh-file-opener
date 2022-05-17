@@ -1,12 +1,12 @@
-alias ${_ZSH_FILE_OPENER_CMD:-f}='_file_opener'
+alias ${_ZSH_FILE_OPENER_CMD:-f}='file_opener'
 _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"otf,ttf,iso"}
 _ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
 _ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
 _ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd"}
 _ZSH_FILE_OPENER_WEB_FORMATS=${_ZSH_FILE_OPENER_WEB_FORMATS:-"html,mhtml"}
 _ZSH_FILE_OPENER_ARCHIVE_FORMATS=${_ZSH_FILE_OPENER_ARCHIVE_FORMATS:-"gz,tgz,bz2,tbz,tbz2,xz,txz,zma,tlz,zst,tzst,tar,lz,gz,bz2,xz,lzma,z,zip,war,jar,sublime-package,ipsw,xpi,apk,aar,whl,rar,rpm,7z,deb,zs"}
-zstyle ':completion:*:*:_file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
-zstyle ':completion:*:*:_file_opener:*:*' ignore-line other
+zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
+zstyle ':completion:*:*:file_opener:*:*' ignore-line other
 
 if [[ $SSH_TTY ]]; then
     export EDITOR='rmate -w'
@@ -44,7 +44,7 @@ else
     }
 fi
 
-_file_opener() {
+file_opener() {
     typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array
     local ret
     [[ -z "$@" ]] && cd > /dev/null 2>&1 && return 0
