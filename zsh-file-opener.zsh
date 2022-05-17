@@ -199,23 +199,17 @@ file_opener_helper() {
     fi
     LBUFFER+="${_ZSH_FILE_OPENER_CMD} "
     zle expand-or-complete
-    typeset -g _did_complete
 }
 zle -N file_opener_helper
 bindkey -e " " file_opener_helper
 
 
 remove_completion_insert_slash() {
-    if [[ -z "$BUFFER" ]]; then
+    if [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )) || [[ -z "$BUFFER" ]]; then
         LBUFFER+="/"
         zle expand-or-complete
-    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${+_did_complete} )) && (( ${#BUFFER} == 2 )); then
-        unset _did_complete
-        zle .undo
-        LBUFFER+="$_ZSH_FILE_OPENER_CMD /"
-        zle expand-or-complete
     else
-        LBUFFER+='/'
+        LBUFFER+="/"
     fi
 }
 zle -N remove_completion_insert_slash
@@ -225,10 +219,8 @@ remove_completion_insert_tilde() {
     if [[ -z "$BUFFER" ]]; then
         LBUFFER+="$_ZSH_FILE_OPENER_CMD ~/"
         zle expand-or-complete
-    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${+_did_complete} )) && (( ${#BUFFER} == 2 )); then
-        unset _did_complete
-        zle .undo
-        LBUFFER+="$_ZSH_FILE_OPENER_CMD ~/"
+    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
+        LBUFFER+="~/"
         zle expand-or-complete
     else
         LBUFFER+='~'
@@ -241,10 +233,8 @@ remove_completion_insert_tilde_with_backtick() {
     if [[ -z "$BUFFER" ]]; then
         LBUFFER+="$_ZSH_FILE_OPENER_CMD ~/"
         zle expand-or-complete
-    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${+_did_complete} )) && (( ${#BUFFER} == 2 )); then
-        unset _did_complete
-        zle .undo
-        LBUFFER+="$_ZSH_FILE_OPENER_CMD ~/"
+    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
+        LBUFFER+="~/"
         zle expand-or-complete
     else
         LBUFFER+='`'
