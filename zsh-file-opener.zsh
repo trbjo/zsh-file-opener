@@ -129,24 +129,6 @@ file_opener() {
         ret=1
     }
 
-    [[ ${arcs} ]] && {
-        typeset -a extract_msg
-        local arc destination exit_code
-        for arc in "${arcs[@]}"; do
-            destination=$(__extracter_wrapper "$arc" "${explicit_extract_location}")
-            exit_code="$?"
-            (( exit_code > 2 )) && ret=5
-            extract_msg+=$(_enum_exit_code $exit_code "$arc" "$destination")
-        done
-        if [[ ${#arcs[@]} -eq 1 ]] && [[ -d $destination ]] && [[ ${ret:-0} == 0 ]]; then
-            cd "$destination"
-        fi
-        local msg
-        for msg in ${extract_msg[@]}; do
-            print "$msg"
-        done
-    } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
-
     [[ ${movs} ]] && {
         if pgrep -x mpv > /dev/null 2>&1; then
             [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1
@@ -186,7 +168,25 @@ file_opener() {
 
     [[ ${webs} ]] && {
         swaymsg -q -- exec \'/usr/bin/firefox ${webs[@]/#/--new-tab }\' \; [app_id=^firefox$] focus
-    } || [[ ${ret} ]]
+    }
+
+    [[ ${arcs} ]] && {
+        typeset -a extract_msg
+        local arc destination exit_code
+        for arc in "${arcs[@]}"; do
+            destination=$(__extracter_wrapper "$arc" "${explicit_extract_location}")
+            exit_code="$?"
+            (( exit_code > 2 )) && ret=5
+            extract_msg+=$(_enum_exit_code $exit_code "$arc" "$destination")
+        done
+        if [[ ${#arcs[@]} -eq 1 ]] && [[ -d $destination ]] && [[ ${ret:-0} == 0 ]]; then
+            cd "$destination"
+        fi
+        local msg
+        for msg in ${extract_msg[@]}; do
+            print "$msg"
+        done
+    } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
     return ${ret:-0}
 }
@@ -205,12 +205,9 @@ bindkey -e " " file_opener_helper
 
 
 remove_completion_insert_slash() {
-    if [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )) || [[ -z "$BUFFER" ]]; then
-        LBUFFER+="/"
-        zle expand-or-complete
-    else
-        LBUFFER+="/"
-    fi
+    LBUFFER+="/"
+    [[ ${BUFFER:0:3} == "${_ZSH_FILE_OPENER_CMD} /" ]] && (( ${#BUFFER} == 3 )) && zle expand-or-complete
+    return 0
 }
 zle -N remove_completion_insert_slash
 bindkey -e "/" remove_completion_insert_slash
