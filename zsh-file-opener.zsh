@@ -194,6 +194,12 @@ file_opener() {
 # we bind slash, space tilde and backtick to help with this function
 file_opener_helper() {
     if [[ "$BUFFER" ]]; then
+        if [[ "${LBUFFER: -2}" == "st" ]]; then
+            local file
+            read file < $XDG_RUNTIME_DIR/sublime_file_name
+            LBUFFER="${LBUFFER[1,-3]}$file "
+            return 0
+        fi
         LBUFFER+=" "
         return 0
     fi
@@ -205,9 +211,13 @@ bindkey -e " " file_opener_helper
 
 
 remove_completion_insert_slash() {
+    if [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
+        LBUFFER+="/"
+        zle .kill-line
+        zle expand-or-complete
+        return 0
+    fi
     LBUFFER+="/"
-    [[ ${BUFFER:0:3} == "${_ZSH_FILE_OPENER_CMD} /" ]] && (( ${#BUFFER} == 3 )) && zle expand-or-complete
-    return 0
 }
 zle -N remove_completion_insert_slash
 bindkey -e "/" remove_completion_insert_slash
