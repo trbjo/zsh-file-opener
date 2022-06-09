@@ -37,11 +37,18 @@ if [[ $SSH_TTY ]]; then
         done
     }
 else
+    if [[ $WAYLAND_DISPLAY ]]; then
     alias -g SS=' |& subl -'
-    _docs_opener() {
-        swaymsg -q -- [app_id=^sublime_text$] focus, exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
-        swaymsg -q -- exec /opt/sublime_text/sublime_text, exec \'/opt/sublime_text/sublime_text ${docs}\'
-    }
+        _docs_opener() {
+            swaymsg -q -- [app_id=^sublime_text$] focus, exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
+            swaymsg -q -- exec /opt/sublime_text/sublime_text, exec \'/opt/sublime_text/sublime_text ${docs}\'
+        }
+    else
+        _docs_opener() {
+            [[ -z $EDITOR ]] && print '$EDITOR not set' && return 1
+            $EDITOR ${docs}
+        }
+    fi
 fi
 
 file_opener() {
