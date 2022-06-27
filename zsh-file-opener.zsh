@@ -145,6 +145,9 @@ file_opener() {
             done
         else
             case "$(aplay -l)" in
+            *": BT600 ["*)
+                local audio='--audio-device=alsa/iec958:CARD=BT600,DEV=0'
+                ;;
             *": BT700 ["*)
                 local audio='--audio-device=alsa/iec958:CARD=BT700,DEV=0'
                 ;;
