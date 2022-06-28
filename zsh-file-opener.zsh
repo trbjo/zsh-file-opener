@@ -201,13 +201,12 @@ file_opener() {
     return ${ret:-0}
 }
 
-# we bind slash, space tilde and backtick to help with this function
-file_opener_helper() {
+st_helper() {
     if [[ "$BUFFER" ]]; then
-        if [[ "${LBUFFER: -2}" == "st" ]]; then
+        if [[ "${LBUFFER: -$ST_ALIAS_LENGTH}" == " $ST_ALIAS" ]] || [[ $LBUFFER == "$ST_ALIAS" ]]; then
             local file
-            read file < $XDG_RUNTIME_DIR/sublime_file_name
-            LBUFFER="${LBUFFER[1,-3]}$file "
+            read file < $__subl_file_path
+            LBUFFER="${LBUFFER[1,-$ST_ALIAS_LENGTH]}$file "
             return 0
         fi
         LBUFFER+=" "
@@ -216,9 +215,8 @@ file_opener_helper() {
     LBUFFER+="${_ZSH_FILE_OPENER_CMD} "
     zle expand-or-complete
 }
-zle -N file_opener_helper
-bindkey -e " " file_opener_helper
-
+zle -N st_helper
+bindkey -e " " st_helper
 
 remove_completion_insert_slash() {
     if [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
