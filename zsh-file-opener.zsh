@@ -203,7 +203,7 @@ file_opener() {
 
 st_helper() {
     if [[ "$BUFFER" ]]; then
-        if [[ "${LBUFFER: -$ST_ALIAS_LENGTH}" == " $ST_ALIAS" ]] || [[ $LBUFFER == "$ST_ALIAS" ]]; then
+        if [[ $ST_ALIAS ]] && [[ "${LBUFFER: -$ST_ALIAS_LENGTH}" == " $ST_ALIAS" ]] || [[ $LBUFFER == "$ST_ALIAS" ]]; then
             local file
             read file < $__subl_file_path
             LBUFFER="${LBUFFER[1,-$ST_ALIAS_LENGTH]}$file "
