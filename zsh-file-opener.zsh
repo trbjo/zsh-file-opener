@@ -53,16 +53,26 @@ fi
 
 file_opener() {
     typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array
-    local ret
-    [[ -z "$@" ]] && cd > /dev/null 2>&1 && return 0
-    for arg in "$@"; do
-        case "${arg}" in
-            (-c|--create) local _create=true ;;
-            (-f|--force) local _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES="";;
-            (-t|--text) local _OPEN_IN_TEXT_EDITOR=true ;;
-            (*) array+=("$arg") ;;
-        esac
-    done
+    local ret arg
+
+    if [ ! -t 0 ]; then
+        # turn stdin into args -- useful in combination with grep --files-with-matches
+        while read -r arg ; do
+            array+=("$arg")
+        done
+    else
+        # args
+        [[ -z "$@" ]] && cd > /dev/null 2>&1 && return 0
+        for arg in "$@"; do
+            case "${arg}" in
+                (-c|--create) local _create=true ;;
+                (-f|--force)  local _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES="" ;;
+                (-t|--text)   local _OPEN_IN_TEXT_EDITOR=true ;;
+                (*) array+=("$arg") ;;
+            esac
+        done
+    fi
+
     for file in "${array[@]}"; do
         if [[ ! -r "${file}" ]]; then
             if [[ ! -z $_create ]]; then
