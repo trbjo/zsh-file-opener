@@ -56,13 +56,7 @@ file_opener() {
     typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array
     local ret arg
 
-    if [ ! -t 0 ]; then
-        # turn stdin into args -- useful in combination with grep --files-with-matches
-        while read -r arg ; do
-            array+=("$arg")
-        done
-    else
-        # args
+    if [[ -t 0 ]]; then
         [[ -z "$@" ]] && cd > /dev/null 2>&1 && return 0
         for arg in "$@"; do
             case "${arg}" in
@@ -71,6 +65,11 @@ file_opener() {
                 (-t|--text)   local _OPEN_IN_TEXT_EDITOR=true ;;
                 (*) array+=("$arg") ;;
             esac
+        done
+    else
+        # turn stdin into args -- useful in combination with grep --files-with-matches
+        while read -r arg ; do
+            array+=("$arg")
         done
     fi
 
