@@ -61,11 +61,17 @@ file_opener() {
         for arg in "$@"; do
             case "${arg}" in
                 (-c|--create) local _create=true ;;
+                (-m|--files-with-matches) local __rg=true ;;
                 (-f|--force)  local _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES="" ;;
                 (-t|--text)   local _OPEN_IN_TEXT_EDITOR=true ;;
                 (*) array+=("$arg") ;;
             esac
         done
+        [[ $__rg ]] && [[ -n "${array}" ]] && {
+            /usr/bin/rg --files-with-matches $array | file_opener
+            return
+        }
+
     else
         # turn stdin into args -- useful in combination with grep --files-with-matches
         while read -r arg ; do
@@ -83,8 +89,12 @@ file_opener() {
                 local assembly="/"
                 for num in {1..${#dir_parts[@]}}; do
                     assembly+="${dir_parts[$num]}"
-                    if [[ ! -r $assembly ]]; then
-                        print "Permission denied: $(_colorizer $assembly)"
+                    if [[ ! -r "$assembly" ]]; then
+                        if [[ -e "$assembly" ]]; then
+                            print "Permission denied: $(_colorizer $assembly)"
+                        else
+                            print "Directory does not exist: $(_colorizer $assembly)"
+                        fi
                         ret=1
                         continue 2
                     fi
@@ -182,7 +192,7 @@ file_opener() {
         swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
     }
 
-    [[ ${vscode} ]] && swaymsg -q -- exec \'electron17 /usr/lib/code/out/cli.js /usr/lib/code/code.js --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
+    [[ ${vscode} ]] && swaymsg -q -- exec \'exec /opt/visual-studio-code/bin/code --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
 
     [[ ${docs} ]] && _docs_opener ${docs}
 
