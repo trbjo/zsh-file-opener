@@ -42,10 +42,9 @@ else
     if [[ $WAYLAND_DISPLAY ]]; then
 
     function __subl() {
-        read in
         swaymsg -q -- [app_id=^sublime_text$] focus ||\
         swaymsg -q -- exec /opt/sublime_text/sublime_text
-        print -n $in | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
+        cat -  | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
     }
     alias -g SS=' |& __subl'
 
