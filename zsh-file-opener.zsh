@@ -1,6 +1,7 @@
-alias ${_ZSH_FILE_OPENER_CMD:-f}='file_opener'
+[[ -n "${_ZSH_FILE_OPENER_CMD}" ]] || _ZSH_FILE_OPENER_CMD=f
+alias ${_ZSH_FILE_OPENER_CMD}='file_opener'
 alias -g "${(U)_ZSH_FILE_OPENER_CMD}${(U)_ZSH_FILE_OPENER_CMD}"=' |& file_opener'
-_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"otf,ttf,iso"}
+_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"pdb,exe,srt,part,ytdl,vtt,zwc,dll,otf,ttf,iso,img,mobi,vtt"}
 _ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
 _ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
 _ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd"}
@@ -39,7 +40,15 @@ if [[ $SSH_TTY ]]; then
     }
 else
     if [[ $WAYLAND_DISPLAY ]]; then
-    alias -g SS=' |& subl -'
+
+    function __subl() {
+        read in
+        swaymsg -q -- [app_id=^sublime_text$] focus ||\
+        swaymsg -q -- exec /opt/sublime_text/sublime_text
+        print -n $in | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
+    }
+    alias -g SS=' |& __subl'
+
         _docs_opener() {
             swaymsg -q -- [app_id=^sublime_text$] focus, exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
             swaymsg -q -- exec /opt/sublime_text/sublime_text, exec \'/opt/sublime_text/sublime_text ${docs}\'
@@ -156,9 +165,9 @@ file_opener() {
         ret=1
     }
 
-    [[ ${movs} ]] && {
+    [[ ${movs} ]] && () {
         if pgrep -x mpv > /dev/null 2>&1; then
-            [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1
+            [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1 && return
             for movie in ${movs[@]}; do
                 print "loadfile ${(qq)movie} append" | socat - /tmp/mpvsocket
                 notify-send.sh "${movie##*/}" "Playing next…" --default-action="swaymsg -q '[app_id=^mpv$] focus'"
