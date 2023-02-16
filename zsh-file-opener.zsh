@@ -42,6 +42,7 @@ else
     if [[ $WAYLAND_DISPLAY ]]; then
 
     function __subl() {
+        # if ! swaymsg -t get_tree | jq -e -r '.. | select(.type?) | select(.focused==true) | .app_id == "sublime_text"' 2>&1 > /dev/null; then
         swaymsg -q -- [app_id=^sublime_text$] focus ||\
         swaymsg -q -- exec /opt/sublime_text/sublime_text
         cat -  | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
@@ -49,7 +50,8 @@ else
     alias -g SS=' |& __subl'
 
         _docs_opener() {
-            swaymsg -q -- [app_id=^sublime_text$] focus, exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
+            swaymsg -q -- '[title=__focused__ app_id=^sublime_text$] focus', exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
+            swaymsg -q -- '[app_id=^sublime_text$] focus', exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
             swaymsg -q -- exec /opt/sublime_text/sublime_text, exec \'/opt/sublime_text/sublime_text ${docs}\'
         }
     else
@@ -196,13 +198,13 @@ file_opener() {
     [[ ${pdfs} ]] && swaymsg -q -- exec \'/usr/bin/zathura ${pdfs}\'
 
     [[ ${pics} ]] && {
-        [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
-        swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
+        # [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
+        # swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
+        swaymsg -q -- exec \'eog $pics\'
     }
 
     [[ ${vscode} ]] && swaymsg -q -- exec \'exec /opt/visual-studio-code/bin/code --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
 
-    [[ ${docs} ]] && _docs_opener ${docs}
 
     [[ ${webs} ]] && {
         swaymsg -q -- exec \'/usr/bin/firefox ${webs[@]/#/--new-tab }\' \; [app_id=^firefox$] focus
@@ -226,6 +228,7 @@ file_opener() {
         done
     } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
 
+    [[ ${docs} ]] && _docs_opener ${docs}
     return ${ret:-0}
 }
 
