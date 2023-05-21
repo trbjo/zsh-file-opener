@@ -5,6 +5,8 @@ _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"pdb,exe,
 _ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
 _ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
 _ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd,heic"}
+_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS=${_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS:-"doc,docx,odt,xls,xlsx,ppt,pptx,odp"}
+_ZSH_FILE_OPENER_GNUMERIC_FORMATS=${_ZSH_FILE_OPENER_GNUMERIC_FORMATS:-"ods"}
 _ZSH_FILE_OPENER_WEB_FORMATS=${_ZSH_FILE_OPENER_WEB_FORMATS:-"html,mhtml"}
 _ZSH_FILE_OPENER_ARCHIVE_FORMATS=${_ZSH_FILE_OPENER_ARCHIVE_FORMATS:-"gz,tgz,bz2,tbz,tbz2,xz,txz,zma,tlz,zst,tzst,tar,lz,gz,bz2,xz,lzma,z,zip,war,jar,sublime-package,ipsw,xpi,apk,aar,whl,rar,rpm,7z,deb,zs"}
 zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
@@ -63,7 +65,7 @@ else
 fi
 
 file_opener() {
-    typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array
+    typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array libre gnumeric
     local ret arg
 
     if [[ -t 0 ]]; then
@@ -133,8 +135,12 @@ file_opener() {
                     pics+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_WEB_FORMATS//,/|})
                     webs+=("${file:A:q}") ;;
-                (ipynb)
-                    vscode+=("${file:A:q}") ;;
+                (${~_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS//,/|})
+                    libre+=("${file:A:q}") ;;
+                (${~_ZSH_FILE_OPENER_GNUMERIC_FORMATS//,/|})
+                    gnumeric+=("${file:A:q}") ;;
+                # (ipynb)
+                    # vscode+=("${file:A:q}") ;;
                 (*)
                     [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:A:q}":$2) && break
                     docs+=("${file:A:q}") ;;
@@ -198,12 +204,19 @@ file_opener() {
     [[ ${pdfs} ]] && swaymsg -q -- exec \'/usr/bin/zathura ${pdfs}\'
 
     [[ ${pics} ]] && {
-        # [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
-        # swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
-        swaymsg -q -- exec \'eog $pics\'
+        [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
+        swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
+        # swaymsg -q -- exec \'eog $pics\'
     }
 
-    [[ ${vscode} ]] && swaymsg -q -- exec \'exec /opt/visual-studio-code/bin/code --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
+    # [[ ${vscode} ]] && swaymsg -q -- exec \'exec /opt/visual-studio-code/bin/code --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
+
+    [[ ${libre} ]] && {
+        swaymsg -q -- exec \'/usr/bin/libreoffice --norestore ${libre[@]}\' \; [app_id=^libreoffice] focus
+    }
+    [[ ${gnumeric} ]] && {
+        swaymsg -q -- exec \'/usr/bin/gnumeric ${gnumeric[@]}\' \; [app_id=^gnumeric] focus
+    }
 
 
     [[ ${webs} ]] && {
