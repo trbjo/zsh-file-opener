@@ -1,16 +1,19 @@
-[[ -n "${_ZSH_FILE_OPENER_CMD}" ]] || _ZSH_FILE_OPENER_CMD=f
-alias ${_ZSH_FILE_OPENER_CMD}='file_opener'
-alias -g "${(U)_ZSH_FILE_OPENER_CMD}${(U)_ZSH_FILE_OPENER_CMD}"=' |& file_opener'
-_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"pdb,exe,srt,part,ytdl,vtt,zwc,dll,otf,ttf,iso,img,mobi,vtt"}
-_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
-_ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
-_ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd,heic"}
-_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS=${_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS:-"doc,docx,odt,xls,xlsx,ppt,pptx,odp"}
-_ZSH_FILE_OPENER_GNUMERIC_FORMATS=${_ZSH_FILE_OPENER_GNUMERIC_FORMATS:-"ods"}
-_ZSH_FILE_OPENER_WEB_FORMATS=${_ZSH_FILE_OPENER_WEB_FORMATS:-"html,mhtml"}
-_ZSH_FILE_OPENER_ARCHIVE_FORMATS=${_ZSH_FILE_OPENER_ARCHIVE_FORMATS:-"gz,tgz,bz2,tbz,tbz2,xz,txz,zma,tlz,zst,tzst,tar,lz,gz,bz2,xz,lzma,z,zip,war,jar,sublime-package,ipsw,xpi,apk,aar,whl,rar,rpm,7z,deb,zs"}
-zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
-zstyle ':completion:*:*:file_opener:*:*' ignore-line other
+#!/usr/bin/env zsh
+# if [[ $- == *i* ]]; then
+    [[ -n "${_ZSH_FILE_OPENER_CMD}" ]] || _ZSH_FILE_OPENER_CMD=f
+    alias ${_ZSH_FILE_OPENER_CMD}='file_opener'
+    alias -g "${(U)_ZSH_FILE_OPENER_CMD}${(U)_ZSH_FILE_OPENER_CMD}"=' |& file_opener'
+    _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"pdb,exe,srt,part,ytdl,vtt,zwc,dll,otf,ttf,iso,img,mobi,vtt"}
+    _ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
+    _ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
+    _ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd,heic"}
+    _ZSH_FILE_OPENER_LIBREOFFICE_FORMATS=${_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS:-"doc,docx,odt,ppt,pptx,odp"}
+    _ZSH_FILE_OPENER_GNUMERIC_FORMATS=${_ZSH_FILE_OPENER_GNUMERIC_FORMATS:-"ods,xls,xlsx"}
+    _ZSH_FILE_OPENER_WEB_FORMATS=${_ZSH_FILE_OPENER_WEB_FORMATS:-"html,mhtml"}
+    _ZSH_FILE_OPENER_ARCHIVE_FORMATS=${_ZSH_FILE_OPENER_ARCHIVE_FORMATS:-"gz,tgz,bz2,tbz,tbz2,xz,txz,zma,tlz,zst,tzst,tar,lz,gz,bz2,xz,lzma,z,zip,war,jar,sublime-package,ipsw,xpi,apk,aar,whl,rar,rpm,7z,deb,zs"}
+    zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
+    zstyle ':completion:*:*:file_opener:*:*' ignore-line other
+# fi
 
 if [[ $SSH_TTY ]]; then
     export EDITOR='rmate -w'
@@ -44,17 +47,19 @@ else
     if [[ $WAYLAND_DISPLAY ]]; then
 
     function __subl() {
-        # if ! swaymsg -t get_tree | jq -e -r '.. | select(.type?) | select(.focused==true) | .app_id == "sublime_text"' 2>&1 > /dev/null; then
-        swaymsg -q -- [app_id=^sublime_text$] focus ||\
-        swaymsg -q -- exec /opt/sublime_text/sublime_text
+        swaymsg -q -- '[app_id=^PopUp$] move scratchpad; [app_id=^sublime_text$] focus; exec /opt/sublime_text/sublime_text'
         cat -  | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
     }
     alias -g SS=' |& __subl'
 
         _docs_opener() {
-            swaymsg -q -- '[title=__focused__ app_id=^sublime_text$] focus', exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
-            swaymsg -q -- '[app_id=^sublime_text$] focus', exec \'/opt/sublime_text/sublime_text ${docs}\' ||\
-            swaymsg -q -- exec /opt/sublime_text/sublime_text, exec \'/opt/sublime_text/sublime_text ${docs}\'
+            swaymsg -q -- "\
+            [title=__focused__ app_id=^PopUp$] move scratchpad;\
+            exec /opt/sublime_text/sublime_text;\
+            [app_id=^sublime_text$] focus;\
+            [title=__focused__ app_id=^sublime_text$] focus;\
+            exec /opt/sublime_text/sublime_text ${docs}
+            "
         }
     else
         _docs_opener() {
@@ -65,10 +70,12 @@ else
 fi
 
 file_opener() {
+    local url='^about:|((ftp://)|(https?://))?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?$'
+
     typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array libre gnumeric
     local ret arg
 
-    if [[ -t 0 ]]; then
+    if [[ -t 0 ]] ||  [[ ! $- == *i* ]]; then
         [[ -z "$@" ]] && cd > /dev/null 2>&1 && return 0
         for arg in "$@"; do
             case "${arg}" in
@@ -92,6 +99,11 @@ file_opener() {
     fi
 
     for file in "${array[@]}"; do
+        if [[ $file =~ ${~url} ]] && [[ ! -e "$file" ]] && [[ ! $- == *i* ]]; then
+            webs+=("${file}")
+            continue
+        fi
+
         if [[ ! -r "${file}" ]]; then
             if [[ ! -z $_create ]]; then
                 mkdir -p "${${file:a}%/*}"
@@ -123,7 +135,8 @@ file_opener() {
         else
             case "${file:e:l}" in
                 (${~_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})
-                    disabled+=("${file:A:q}") ;;
+                    print $file
+                   [[ $- == *i* ]] && disabled+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_ARCHIVE_FORMATS//,/|})
                     arcs+=(${file:a})
                     [[ "${#@}" -eq 2 ]] && { local explicit_extract_location="$2"; break } ;;
@@ -139,9 +152,8 @@ file_opener() {
                     libre+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_GNUMERIC_FORMATS//,/|})
                     gnumeric+=("${file:A:q}") ;;
-                # (ipynb)
-                    # vscode+=("${file:A:q}") ;;
                 (*)
+                    [[ ! $- == *i* ]] && [[ ! -e "${file:A:q}" ]] && webs+=("$file") && break
                     [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:A:q}":$2) && break
                     docs+=("${file:A:q}") ;;
             esac
@@ -209,19 +221,18 @@ file_opener() {
         # swaymsg -q -- exec \'eog $pics\'
     }
 
-    # [[ ${vscode} ]] && swaymsg -q -- exec \'exec /opt/visual-studio-code/bin/code --enable-features=UseOzonePlatform --ozone-platform=wayland ${vscode}\' \; [app_id=^code-oss$] focus
-
     [[ ${libre} ]] && {
-        swaymsg -q -- exec \'/usr/bin/libreoffice --norestore ${libre[@]}\' \; [app_id=^libreoffice] focus
+        swaymsg -q -- "exec /usr/bin/libreoffice --norestore ${libre[@]}; [app_id=^libreoffice] focus"
     }
     [[ ${gnumeric} ]] && {
-        swaymsg -q -- exec \'/usr/bin/gnumeric ${gnumeric[@]}\' \; [app_id=^gnumeric] focus
+        swaymsg -q -- "exec /usr/bin/gnumeric ${gnumeric[@]}; [app_id=^gnumeric] focus"
     }
 
 
     [[ ${webs} ]] && {
-        swaymsg -q -- exec \'/usr/bin/firefox ${webs[@]/#/--new-tab }\' \; [app_id=^firefox$] focus
+        firefox ${webs[@]}
     }
+
 
     [[ ${arcs} ]] && {
         typeset -a extract_msg
@@ -239,9 +250,10 @@ file_opener() {
         for msg in ${extract_msg[@]}; do
             print "$msg"
         done
-    } < $TTY || [[ ${ret} ]] || swaymsg -q -- [title=^PopUp$] move scratchpad > /dev/null 2>&1
+    } < $TTY
 
     [[ ${docs} ]] && _docs_opener ${docs}
+
     return ${ret:-0}
 }
 
@@ -301,3 +313,5 @@ remove_completion_insert_tilde_with_backtick() {
 }
 zle -N remove_completion_insert_tilde_with_backtick
 bindkey -e '`' remove_completion_insert_tilde_with_backtick
+
+[[ $ZSH_EVAL_CONTEXT != 'toplevel' ]] || file_opener "$@"
