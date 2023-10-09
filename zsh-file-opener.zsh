@@ -1,19 +1,18 @@
 #!/usr/bin/env zsh
-# if [[ $- == *i* ]]; then
-    [[ -n "${_ZSH_FILE_OPENER_CMD}" ]] || _ZSH_FILE_OPENER_CMD=f
-    alias ${_ZSH_FILE_OPENER_CMD}='file_opener'
-    alias -g "${(U)_ZSH_FILE_OPENER_CMD}${(U)_ZSH_FILE_OPENER_CMD}"=' |& file_opener'
-    _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"pdb,exe,srt,part,ytdl,vtt,zwc,dll,otf,ttf,iso,img,mobi,vtt"}
-    _ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
-    _ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
-    _ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd,heic"}
-    _ZSH_FILE_OPENER_LIBREOFFICE_FORMATS=${_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS:-"doc,docx,odt,ppt,pptx,odp"}
-    _ZSH_FILE_OPENER_GNUMERIC_FORMATS=${_ZSH_FILE_OPENER_GNUMERIC_FORMATS:-"ods,xls,xlsx"}
-    _ZSH_FILE_OPENER_WEB_FORMATS=${_ZSH_FILE_OPENER_WEB_FORMATS:-"html,mhtml"}
-    _ZSH_FILE_OPENER_ARCHIVE_FORMATS=${_ZSH_FILE_OPENER_ARCHIVE_FORMATS:-"gz,tgz,bz2,tbz,tbz2,xz,txz,zma,tlz,zst,tzst,tar,lz,gz,bz2,xz,lzma,z,zip,war,jar,sublime-package,ipsw,xpi,apk,aar,whl,rar,rpm,7z,deb,zs"}
-    zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
-    zstyle ':completion:*:*:file_opener:*:*' ignore-line other
-# fi
+
+[[ -n "${_ZSH_FILE_OPENER_CMD}" ]] || _ZSH_FILE_OPENER_CMD=f
+alias ${_ZSH_FILE_OPENER_CMD}='file_opener'
+alias -g "${(U)_ZSH_FILE_OPENER_CMD}${(U)_ZSH_FILE_OPENER_CMD}"=' |& file_opener'
+_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES=${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES:-"pdb,exe,srt,part,ytdl,vtt,zwc,dll,otf,ttf,iso,img,mobi,vtt"}
+_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS=${_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS:-"mkv,mp4,movs,mp3,avi,mpg,m4v,oga,m4a,m4b,opus,wmv,mov,wav"}
+_ZSH_FILE_OPENER_BOOK_FORMATS=${_ZSH_FILE_OPENER_BOOK_FORMATS:-"pdf,epub,djvu"}
+_ZSH_FILE_OPENER_PICTURE_FORMATS=${_ZSH_FILE_OPENER_PICTURE_FORMATS:-"jpeg,jpg,png,webp,svg,gif,bmp,tif,tiff,psd,heic"}
+_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS=${_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS:-"doc,docx,odt,ppt,pptx,odp"}
+_ZSH_FILE_OPENER_GNUMERIC_FORMATS=${_ZSH_FILE_OPENER_GNUMERIC_FORMATS:-"ods,xls,xlsx"}
+_ZSH_FILE_OPENER_WEB_FORMATS=${_ZSH_FILE_OPENER_WEB_FORMATS:-"SNTHSN"}
+_ZSH_FILE_OPENER_ARCHIVE_FORMATS=${_ZSH_FILE_OPENER_ARCHIVE_FORMATS:-"gz,tgz,bz2,tbz,tbz2,xz,txz,zma,tlz,zst,tzst,tar,lz,gz,bz2,xz,lzma,z,zip,war,jar,sublime-package,ipsw,xpi,apk,aar,whl,rar,rpm,7z,deb,zs"}
+zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
+zstyle ':completion:*:*:file_opener:*:*' ignore-line other
 
 if [[ $SSH_TTY ]]; then
     export EDITOR='rmate -w'
@@ -47,17 +46,15 @@ else
     if [[ $WAYLAND_DISPLAY ]]; then
 
     function __subl() {
-        swaymsg -q -- '[app_id=^PopUp$] move scratchpad; [app_id=^sublime_text$] focus; exec /opt/sublime_text/sublime_text'
+        swaymsg -q -- '[app_id=^popup$] move scratchpad; [app_id=^sublime_text|^subl$] focus; exec /opt/sublime_text/sublime_text'
         cat -  | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
     }
     alias -g SS=' |& __subl'
 
         _docs_opener() {
             swaymsg -q -- "\
-            [title=__focused__ app_id=^PopUp$] move scratchpad;\
-            exec /opt/sublime_text/sublime_text;\
-            [app_id=^sublime_text$] focus;\
-            [title=__focused__ app_id=^sublime_text$] focus;\
+            [app_id=^popup$] move scratchpad;\
+            [app_id=^sublime_text|^subl$] focus;\
             exec /opt/sublime_text/sublime_text ${docs}
             "
         }
@@ -69,8 +66,48 @@ else
     fi
 fi
 
+
+
+
+getNameOfTorrent() {
+    # stringified=$(sed -e 's/%20/ /g' <<< $1)
+    stringified="${1:gs/%20/ }"
+    stringified="${stringified:gs/%26/\&}"
+    local IFS='='
+    while read -r prot hash name tracker
+    do
+        printf %s "${name: 0:-3}"
+    done <<< "$stringified"
+}
+
+
+transmission_function() {
+    local message icon action file
+    if [[ ${#@} -gt 1 ]]; then
+        message="${#@} torrents"
+    elif [[ ${1: 0:6} == "magnet" ]]; then
+        message=$(getNameOfTorrent $1)
+    else
+        message="Torrent"
+    fi
+    message="$message added"
+    icon="com.github.davidmhewitt.torrential"
+    action='swaymsg -q -- [title=\"^Transmission Web Interface \"] focus || xdg-open http://127.0.0.1:9091/transmission/web/'
+    notify-send.sh "Transmission" "$message" --icon=$icon --default-action=$action
+
+    # if /usr/bin/ssh tb@51.154.197.131 "transmission-remote -a '"${@}"'"; then
+    # /usr/bin/ssh tb@51.154.197.131 "transmission-remote -a '"${@}"'" && message $added
+
+    systemctl --user enable --now transmission.service
+
+    for file in "${@}"; do
+        transmission-remote -a "${file}"
+    done
+}
+
+
 file_opener() {
-    local url='^about:|((ftp://)|(https?://))?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?$'
+    local url='^about:|^((ftp://)(magnet:)||(https?://))?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?$'
 
     typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array libre gnumeric
     local ret arg
@@ -83,6 +120,14 @@ file_opener() {
                 (-m|--files-with-matches) local __rg=true ;;
                 (-f|--force)  local _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES="" ;;
                 (-t|--text)   local _OPEN_IN_TEXT_EDITOR=true ;;
+                (-w|--web)
+                    local _zsh_file_opener_web_formats
+                    if [[ ! -z "$_ZSH_FILE_OPENER_WEB_FORMATS" ]]; then
+                        _zsh_file_opener_web_formats="${_ZSH_FILE_OPENER_WEB_FORMATS},html,mhtml"
+                    else
+                        _zsh_file_opener_web_formats="html,mhtml"
+                    fi
+                 ;;
                 (*) array+=("$arg") ;;
             esac
         done
@@ -97,6 +142,7 @@ file_opener() {
             array+=("$arg")
         done
     fi
+    local webz=${_ZSH_FILE_OPENER_WEB_FORMATS:-$_zsh_file_opener_web_formats}
 
     for file in "${array[@]}"; do
         if [[ $file =~ ${~url} ]] && [[ ! -e "$file" ]] && [[ ! $- == *i* ]]; then
@@ -126,6 +172,7 @@ file_opener() {
                 done
             fi
         fi
+
         if [[ -n $_OPEN_IN_TEXT_EDITOR ]]; then
             docs+=("${file:A:q}")
             continue
@@ -146,7 +193,7 @@ file_opener() {
                     swaymsg -q "[app_id=\"^org.pwmt.zathura$\" title=\"^${(q)file##*/}\ \[\"] focus" || pdfs+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_PICTURE_FORMATS//,/|})
                     pics+=("${file:A:q}") ;;
-                (${~_ZSH_FILE_OPENER_WEB_FORMATS//,/|})
+                (${~webz//,/|})
                     webs+=("${file:A:q}") ;;
                 (${~_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS//,/|})
                     libre+=("${file:A:q}") ;;
@@ -162,7 +209,12 @@ file_opener() {
 
     [[ ${dirs} ]] && {
         if [[ ${#dirs} -eq 1 ]]; then
-            cd "$dirs" && ret=${ret:-0}
+            # print lol
+            if [[ $- == *i* ]]; then # as func
+                cd "$dirs" && ret=${ret:-0}
+            else # as file
+                footclient -D $dirs
+            fi
         else
             local -aU color_dirs
             for dir in ${dirs}; do
@@ -213,9 +265,17 @@ file_opener() {
         fi
     }
 
-    [[ ${pdfs} ]] && swaymsg -q -- exec \'/usr/bin/zathura ${pdfs}\'
+    [[ ${pdfs} ]] && {
+        local pdf_str=""
+        pdfs=("${(@on)pdfs}")
+        for pdf in $pdfs; do
+            pdf_str+="/usr/bin/zathura $pdf &!; "
+        done
+        swaymsg -q -- exec \'$pdf_str\'
+    }
 
     [[ ${pics} ]] && {
+        pics=("${(@on)pics}")
         [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
         swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
         # swaymsg -q -- exec \'eog $pics\'
@@ -230,7 +290,17 @@ file_opener() {
 
 
     [[ ${webs} ]] && {
-        firefox ${webs[@]}
+        local web
+        typeset -a torrents
+
+        for web in $webs; do
+            if [[ $web == magnet* ]]; then
+                torrents+=("${web}")
+            else
+                firefox ${webs[@]}
+            fi
+        done
+        [[ ${torrents} ]] && transmission_function ${torrents}
     }
 
 
@@ -274,44 +344,4 @@ st_helper() {
 zle -N st_helper
 bindkey -e " " st_helper
 
-remove_completion_insert_slash() {
-    if [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
-        LBUFFER+="/"
-        zle .kill-line
-        zle expand-or-complete
-        return 0
-    fi
-    LBUFFER+="/"
-}
-zle -N remove_completion_insert_slash
-bindkey -e "/" remove_completion_insert_slash
-
-remove_completion_insert_tilde() {
-    if [[ -z "$BUFFER" ]]; then
-        LBUFFER+="$_ZSH_FILE_OPENER_CMD ~/"
-        zle expand-or-complete
-    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
-        LBUFFER+="~/"
-        zle expand-or-complete
-    else
-        LBUFFER+='~'
-    fi
-}
-zle -N remove_completion_insert_tilde
-bindkey -e "~" remove_completion_insert_tilde
-
-remove_completion_insert_tilde_with_backtick() {
-    if [[ -z "$BUFFER" ]]; then
-        LBUFFER+="$_ZSH_FILE_OPENER_CMD ~/"
-        zle expand-or-complete
-    elif [[ ${BUFFER:0:2} == "${_ZSH_FILE_OPENER_CMD} " ]] && (( ${#BUFFER} == 2 )); then
-        LBUFFER+="~/"
-        zle expand-or-complete
-    else
-        LBUFFER+='`'
-    fi
-}
-zle -N remove_completion_insert_tilde_with_backtick
-bindkey -e '`' remove_completion_insert_tilde_with_backtick
-
-[[ $ZSH_EVAL_CONTEXT != 'toplevel' ]] || file_opener "$@"
+[[ ! $- == *i* ]] && file_opener "$@"
