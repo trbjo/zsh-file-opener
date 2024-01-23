@@ -45,12 +45,6 @@ if [[ $SSH_TTY ]]; then
 else
     if [[ $WAYLAND_DISPLAY ]]; then
 
-    function __subl() {
-        swaymsg -q -- '[app_id=^popup$] move scratchpad; [app_id=^sublime_text|^subl$] focus; exec /opt/sublime_text/sublime_text'
-        cat -  | /opt/sublime_text/sublime_text --fwdargv0 /usr/bin/zsh -
-    }
-    alias -g SS=' |& __subl'
-
         _docs_opener() {
             swaymsg -q -- "\
             [app_id=^popup$] move scratchpad;\
@@ -65,46 +59,6 @@ else
         }
     fi
 fi
-
-
-
-
-getNameOfTorrent() {
-    # stringified=$(sed -e 's/%20/ /g' <<< $1)
-    stringified="${1:gs/%20/ }"
-    stringified="${stringified:gs/%26/\&}"
-    local IFS='='
-    while read -r prot hash name tracker
-    do
-        printf %s "${name: 0:-3}"
-    done <<< "$stringified"
-}
-
-
-transmission_function() {
-    local message icon action file
-    if [[ ${#@} -gt 1 ]]; then
-        message="${#@} torrents"
-    elif [[ ${1: 0:6} == "magnet" ]]; then
-        message=$(getNameOfTorrent $1)
-    else
-        message="Torrent"
-    fi
-    message="$message added"
-    icon="com.github.davidmhewitt.torrential"
-    action='swaymsg -q -- [title=\"^Transmission Web Interface \"] focus || xdg-open http://127.0.0.1:9091/transmission/web/'
-    notify-send.sh "Transmission" "$message" --icon=$icon --default-action=$action
-
-    # if /usr/bin/ssh tb@51.154.197.131 "transmission-remote -a '"${@}"'"; then
-    # /usr/bin/ssh tb@51.154.197.131 "transmission-remote -a '"${@}"'" && message $added
-
-    systemctl --user enable --now transmission.service
-
-    for file in "${@}"; do
-        transmission-remote -a "${file}"
-    done
-}
-
 
 file_opener() {
     local url='^about:|^((ftp://)(magnet:)||(https?://))?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?$'
@@ -145,7 +99,14 @@ file_opener() {
     local webz=${_ZSH_FILE_OPENER_WEB_FORMATS:-$_zsh_file_opener_web_formats}
 
     for file in "${array[@]}"; do
+        [[ "$file" == file:/* ]] && file="/${file#file://*/*}"
+
         if [[ $file =~ ${~url} ]] && [[ ! -e "$file" ]] && [[ ! $- == *i* ]]; then
+            webs+=("${file}")
+            continue
+        fi
+
+        if [[ "$file" == magnet* ]]; then
             webs+=("${file}")
             continue
         fi
@@ -200,7 +161,7 @@ file_opener() {
                 (${~_ZSH_FILE_OPENER_GNUMERIC_FORMATS//,/|})
                     gnumeric+=("${file:A:q}") ;;
                 (*)
-                    [[ ! $- == *i* ]] && [[ ! -e "${file:A:q}" ]] && webs+=("$file") && break
+                    [[ ! $- == *i* ]] && [[ ! -e "${file:A:q}" ]] && webs+=("$file") && continue
                     [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:A:q}":$2) && break
                     docs+=("${file:A:q}") ;;
             esac
@@ -256,12 +217,7 @@ file_opener() {
                 ;;
             esac
 
-            if grep -q 'enabled' /sys/class/drm/card0-eDP-1/enabled && grep -q 'enabled' /sys/class/drm/{card0-DP-1,card0-DP-2,card0-HDMI-A-1}/enabled; then
-                swaymsg -q output eDP-1 disable
-                swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs} \; grep -q open /proc/acpi/button/lid/LID/state \&\& swaymsg output eDP-1 enable\'
-            else
-                swaymsg -q -- exec \'/usr/bin/mpv $audio --player-operation-mode=pseudo-gui ${movs}\'
-            fi
+            swaymsg -q -- exec \'/usr/bin/mpv $audio ${movs}\'
         fi
     }
 
@@ -276,9 +232,9 @@ file_opener() {
 
     [[ ${pics} ]] && {
         pics=("${(@on)pics}")
-        [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
-        swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
-        # swaymsg -q -- exec \'eog $pics\'
+        # [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
+        # swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
+        swaymsg -q -- exec \'eog $pics\'
     }
 
     [[ ${libre} ]] && {
@@ -300,7 +256,7 @@ file_opener() {
                 firefox ${webs[@]}
             fi
         done
-        [[ ${torrents} ]] && transmission_function ${torrents}
+        [[ ${torrents} ]] && transmission.sh ${torrents}
     }
 
 
@@ -326,22 +282,5 @@ file_opener() {
 
     return ${ret:-0}
 }
-
-st_helper() {
-    if [[ "$BUFFER" ]]; then
-        if [[ $ST_ALIAS ]] && [[ "${LBUFFER: -$ST_ALIAS_LENGTH}" == " $ST_ALIAS" ]] || [[ $LBUFFER == "$ST_ALIAS" ]]; then
-            local file
-            read file < $__subl_file_path
-            LBUFFER="${LBUFFER[1,-$ST_ALIAS_LENGTH]}$file "
-            return 0
-        fi
-        LBUFFER+=" "
-        return 0
-    fi
-    LBUFFER+="${_ZSH_FILE_OPENER_CMD} "
-    zle expand-or-complete
-}
-zle -N st_helper
-bindkey -e " " st_helper
 
 [[ ! $- == *i* ]] && file_opener "$@"
