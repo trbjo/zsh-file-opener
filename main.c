@@ -26,10 +26,17 @@ int is_extension_in_list(const char *ext, const char *list) {
     char *ext_dup = strdup(list);
     char *token = strtok(ext_dup, ",");
     while(token != NULL) {
+
+        if(strcmp("*", token) == 0) {
+            free(ext_dup);
+            return 1;
+        }
+
         if(strcmp(ext, token) == 0) {
             free(ext_dup);
             return 1;
         }
+
         token = strtok(NULL, ",");
     }
     free(ext_dup);
@@ -123,7 +130,6 @@ typedef struct {
 
 
 void launch_opener_with_files(Opener opener, char **file_paths) {
-
     // Construct the swaymsg argument string
     char sway_arg[128]; // Ensure this is large enough for the expected strings
     snprintf(sway_arg, sizeof(sway_arg), "%s focus", opener.criteria);
@@ -142,10 +148,6 @@ void launch_opener_with_files(Opener opener, char **file_paths) {
         perror("fork failed for swaymsg");
         exit(1);
     }
-
-
-
-
 
     // Prepare to launch the actual opener
     int arg_count;
@@ -172,7 +174,7 @@ void launch_opener_with_files(Opener opener, char **file_paths) {
     // Launch the actual opener
     pid_t pid_opener = fork();
     if (pid_opener == 0) {
-        execvp(opener.command[0], args);
+        execvp(args[0], args);
         printf("Unknown command: %s\n", opener.command[0]);
         exit(1);
     } else if (pid_opener > 0) {
@@ -235,60 +237,70 @@ int main(int argc, char **argv) {
             return 1;
         }
         dup2(dev_null_fd, STDOUT_FILENO);
-        dup2(dev_null_fd, STDERR_FILENO);
         close(dev_null_fd);
     }
 
-    // if(argc < 2) {
-        // printf("Usage: %s <file1> <file2> ...\n", argv[0]);
-        // return 1;
-    // }
-
-    char **inputs;
-    int input_count = 0;
-    if (isatty(STDIN_FILENO)) {
-        inputs = process_argv(argc, argv, &input_count);
-    } else {
-        inputs = process_stdin(&input_count);
+    int argv_input_count = 0, stdin_input_count = 0;
+    char **argv_inputs = process_argv(argc, argv, &argv_input_count);
+    char **stdin_inputs = NULL;
+    if (!isatty(STDIN_FILENO)) {
+        stdin_inputs = process_stdin(&stdin_input_count);
     }
 
+    int total_count = argv_input_count + stdin_input_count;
+    char **inputs = (char **)malloc(total_count * sizeof(char *));
+    if (!inputs) {
+        perror("Failed to allocate memory for inputs");
+        return 1;
+    }
+
+    // Copy argv inputs
+    for (int i = 0; i < argv_input_count; i++) {
+        inputs[i] = argv_inputs[i];
+    }
+
+    // Copy stdin inputs
+    for (int i = 0; i < stdin_input_count; i++) {
+        inputs[argv_input_count + i] = stdin_inputs[i];
+    }
 
     // Define your opener environment variables
     const char *exclude_suffixes = getenv("_FILE_OPENER_EXCLUDE_SUFFIXES") ? : "";
+    char *disabled_files[total_count];
 
 
     const char *multimedia_formats = getenv("_FILE_OPENER_MULTIMEDIA_FORMATS") ? : "";
     char *multimedia_command[] = {"mpv", NULL};
     Opener multimedia_opener = {multimedia_command, "[app_id=^mpv$]"};
-    char *multimedia_files[argc];
+    char *multimedia_files[total_count];
 
     const char *book_formats = getenv("_FILE_OPENER_BOOK_FORMATS") ? : "";
     char *book_command[] = {"zathura", NULL};
     Opener book_opener = {book_command, "[app_id=^org.pwmt.zathura$]"};
-    char *book_files[argc];
+    char *book_files[total_count];
 
     const char *picture_formats = getenv("_FILE_OPENER_PICTURE_FORMATS") ? : "";
     char *picture_command[] = {"eog", NULL};
     Opener picture_opener = {picture_command, "[app_id=^eog$]"};
-    char *picture_files[argc];
+    char *picture_files[total_count];
 
     const char *libreoffice_formats = getenv("_FILE_OPENER_LIBREOFFICE_FORMATS") ? : "";
     char *libreoffice_command[] = {"/usr/bin/libreoffice", "--norestore", NULL};
     Opener libreoffice_opener = {libreoffice_command, "[app_id=^libreoffice$]"};
-    char *libreoffice_files[argc];
+    char *libreoffice_files[total_count];
 
     const char *web_formats = getenv("_FILE_OPENER_WEB_FORMATS") ? : "";
     char *firefox_command[] = {"firefox", NULL};
     Opener firefox_opener = {firefox_command, "[app_id=^firefox$]"};
-    char *web_files[argc];
-    char *url_files[argc];
+    char *web_files[total_count];
+    char *url_files[total_count];
 
     const char *archive_formats = getenv("_FILE_OPENER_ARCHIVE_FORMATS") ? : "";
 
 
     char *sublime_command[] = {"/opt/sublime_text/sublime_text", NULL};
     Opener sublime_opener = {sublime_command, "[app_id=^sublime_text$]"};
-    char *other_files[argc];
+    char *other_files[total_count];
 
 
 
@@ -310,9 +322,9 @@ int main(int argc, char **argv) {
     }
 
 
-    int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0;
+    int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0, disabled_count = 0;
 
-    for (int i = 0; i < input_count; i++) {
+    for (int i = 0; i < total_count; i++) {
         if (!inputs[i] || inputs[i][0] == '\0') {
             continue;
         }
@@ -327,7 +339,6 @@ int main(int argc, char **argv) {
             continue;
         }
 
-
         if (strncmp(input, "file://", 7) == 0) {
             // Handle file:// URLs
             char *local_path = input + 7; // Skip the "file://" part
@@ -338,39 +349,51 @@ int main(int argc, char **argv) {
             }
             const char *ext = get_file_extension(local_path);
             other_files[other_count++] = strdup(local_path); // Duplicate the path if you're going to free input later
-
-        } else if (strncmp(input, "https://", 8) == 0 || strncmp(input, "http://", 7) == 0) {
+            continue;
+        }
+        if (strncmp(input, "https://", 8) == 0 || strncmp(input, "http://", 7) == 0) {
             url_files[url_count++] = strdup(input); // Duplicate the URL if you're going to free input later
+        }
+
+        const char *ext = get_file_extension(input);
+
+        if(is_extension_in_list(ext, multimedia_formats)) {
+            multimedia_files[multimedia_count++] = input;
+        } else if(is_extension_in_list(ext, book_formats)) {
+            book_files[book_count++] = input;
+        } else if(is_extension_in_list(ext, web_formats)) {
+            web_files[web_count++] = input;
+        } else if(is_extension_in_list(ext, picture_formats)) {
+            picture_files[picture_count++] = input;
         } else {
 
-
-            const char *ext = get_file_extension(input);
             if(is_extension_in_list(ext, exclude_suffixes)) {
-
+                disabled_files[disabled_count++] = input;
                 if (debug_mode) {
                     fprintf(stderr, "Skipping excluded file type: %s\n", input);
                 }
-
-                free(input);
-                continue; // Skip this file if the extension is in the exclude list
+                continue;
             }
 
-            // Sort files into corresponding arrays based on the file extension
-            if(is_extension_in_list(ext, multimedia_formats)) {
-                multimedia_files[multimedia_count++] = input;
-            } else if(is_extension_in_list(ext, book_formats)) {
-                book_files[book_count++] = input;
-            } else if(is_extension_in_list(ext, web_formats)) {
-                web_files[web_count++] = input;
-            } else if(is_extension_in_list(ext, picture_formats)) {
-                picture_files[picture_count++] = input;
-            } //... (Handle other file types)
-            else {
-                other_files[other_count++] = input;
-            }
+            other_files[other_count++] = input;
         }
 
     }
+
+    for (int i = 0; i < disabled_count; i++) {
+        fprintf(stderr, "%s\n", disabled_files[i]);
+    }
+
+    if (!debug_mode) {
+        int dev_null_fd = open("/dev/null", O_WRONLY);
+        if (dev_null_fd == -1) {
+            perror("Failed to open /dev/null");
+            return 1;
+        }
+        dup2(dev_null_fd, STDERR_FILENO);
+        close(dev_null_fd);
+    }
+
 
     multimedia_files[multimedia_count] = NULL;
     if (multimedia_count > 0) launch_opener_with_files(multimedia_opener, multimedia_files);
@@ -390,19 +413,14 @@ int main(int argc, char **argv) {
     other_files[other_count] = NULL;
     if (other_count > 0) launch_opener_with_files(sublime_opener, other_files); // Assuming editor_opener for files not matched by any type
 
-    // Free the allocated file paths
     for (int i = 0; i < other_count; i++) {
         free(other_files[i]);
     }
 
-
-    // Free the allocated memory for inputs
-    for (int i = 0; i < input_count; i++) {
+    for (int i = 0; i < total_count; i++) {
         free(inputs[i]);
     }
     free(inputs);
-
-    //... (Free other allocated file paths)
 
     return 0;
 }
