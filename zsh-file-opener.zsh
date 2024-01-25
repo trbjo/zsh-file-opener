@@ -61,7 +61,7 @@ else
 fi
 
 file_opener(){
-    [[ -d "${@:-.}" ]] && cd $@ || xdg-open $@
+    [[ -d "${@:-.}" ]] && cd $@ || open $@
 }
 alias u='file_opener'
 alias -g U='| open'
