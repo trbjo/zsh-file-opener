@@ -313,9 +313,14 @@ int main(int argc, char **argv) {
     int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0;
 
     for (int i = 0; i < input_count; i++) {
+        if (!inputs[i] || inputs[i][0] == '\0') {
+            continue;
+        }
+
         char *input = build_absolute_path_or_url(inputs[i]);
+
         if (debug_mode) {
-            fprintf(stdout, "file: %s\n", input);
+            fprintf(stdout, "file: '%s', input: '%s'\n", input, inputs[i]);
         }
 
         if(!input) {
