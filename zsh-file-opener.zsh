@@ -60,7 +60,14 @@ else
     fi
 fi
 
-file_opener() {
+file_opener(){
+    [[ -d "${@:-.}" ]] && cd $@ || xdg-open $@
+}
+alias u='file_opener'
+alias -g U='| open'
+
+lolfile_opener() {
+
     local url='^about:|^((ftp://)(magnet:)||(https?://))?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)?$'
 
     typeset -aU arcs movs pdfs pics webs docs dirs batstatus vscode disabled array libre gnumeric
@@ -161,7 +168,7 @@ file_opener() {
                 (${~_ZSH_FILE_OPENER_GNUMERIC_FORMATS//,/|})
                     gnumeric+=("${file:A:q}") ;;
                 (*)
-                    [[ ! $- == *i* ]] && [[ ! -e "${file:A:q}" ]] && webs+=("$file") && continue
+                    webs+=("$file") && continue
                     [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:A:q}":$2) && break
                     docs+=("${file:A:q}") ;;
             esac
