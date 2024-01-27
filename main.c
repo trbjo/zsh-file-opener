@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <ctype.h>
 
 
 #define MAX_ARGS 256 // Define a maximum number of arguments
@@ -71,28 +72,52 @@ const char *get_file_extension(const char *filename) {
     return dot + 1;
 }
 
+// Function to convert a string to lower case
+char* str_to_lower(const char* str) {
+    if (str == NULL) return NULL;
+    char* lower_str = strdup(str);
+    for (int i = 0; lower_str[i]; i++) {
+        lower_str[i] = tolower(lower_str[i]);
+    }
+    return lower_str;
+}
+
 // Function to check if the extension is in the list
 int is_extension_in_list(const char *ext, const char *list) {
+    if (ext == NULL || list == NULL) return 0;
+
+    // Convert ext to lower case
+    char *lower_ext = str_to_lower(ext);
+    if (lower_ext == NULL) return 0;
+
+    // Duplicate list for strtok
     char *ext_dup = strdup(list);
+    if (ext_dup == NULL) {
+        free(lower_ext);
+        return 0;
+    }
+
     char *token = strtok(ext_dup, ",");
-    while(token != NULL) {
+    while (token != NULL) {
+        // Convert token to lower case
+        char *lower_token = str_to_lower(token);
+        if (lower_token == NULL) continue;
 
-        if(strcmp("*", token) == 0) {
+        if (strcmp("*", lower_token) == 0 || strcmp(lower_ext, lower_token) == 0) {
+            free(lower_ext);
+            free(lower_token);
             free(ext_dup);
             return 1;
         }
 
-        if(strcmp(ext, token) == 0) {
-            free(ext_dup);
-            return 1;
-        }
-
+        free(lower_token);
         token = strtok(NULL, ",");
     }
+
+    free(lower_ext);
     free(ext_dup);
     return 0;
 }
-
 
 // Function to expand tilde to HOME
 char* expand_tilde(const char *path) {
@@ -408,7 +433,7 @@ int main(int argc, char **argv) {
 
         const char *ext = get_file_extension(input);
 
-        if(is_extension_in_list(ext, multimedia_formats)) {
+        if (is_extension_in_list(ext, multimedia_formats)) {
             multimedia_files[multimedia_count++] = input;
         } else if(is_extension_in_list(ext, book_formats)) {
             book_files[book_count++] = input;
@@ -475,7 +500,7 @@ int main(int argc, char **argv) {
             char *book_basename = get_basename(book);
 
             char criteria[128] = "";
-            snprintf(criteria, 128, "[app_id=\"^org.pwmt.zathura$\" title=\"^%s \"]", book_basename);
+            snprintf(criteria, sizeof(criteria), "[app_id=\"^org.pwmt.zathura$\" title=\"^%s \"]", book_basename);
             char *swaymsg[] = {"swaymsg", criteria, "focus", NULL};
 
             if (!run_cmd(swaymsg, 1)) {
