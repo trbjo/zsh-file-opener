@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-filename=open
+filename="${${0:A:h}##*/}"
 gcc $(pkg-config --cflags glib-2.0) \
 -march=native \
 -flto \

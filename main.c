@@ -8,11 +8,61 @@
 #include <pwd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 
+#define MAX_ARGS 256 // Define a maximum number of arguments
 #define MAX_EXT_LENGTH 10
 #define MAX_PATH_LENGTH 1024
 #define MAX_INPUTS 1024
+
+void mpv_message(const char *socket_path, const char *path) {
+    char message[1024];
+    snprintf(message, sizeof(message), "loadfile \"%s\" append\n", path);
+
+    // Create a socket
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock == -1) {
+        perror("socket error");
+        exit(1);
+    }
+
+    // Set up the address structure
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
+
+    // Connect to the socket
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        perror("connect error");
+        close(sock);  // Ensure the socket is properly closed
+        exit(1);
+    }
+
+    // Write the message to the socket
+    if (write(sock, message, strlen(message)) == -1) {
+        perror("write error");
+        close(sock);  // Ensure the socket is properly closed
+        exit(1);
+    }
+
+    // Close the socket
+    close(sock);
+}
+
+char* get_basename(char *path) {
+    // Find the last occurrence of '/'
+    char *last_slash = strrchr(path, '/');
+    if (last_slash != NULL) {
+        // Return the substring after the last '/'
+        return last_slash + 1;
+    } else {
+        // The path doesn't contain '/', return the original path
+        return path;
+    }
+}
 
 // Function to get the file extension
 const char *get_file_extension(const char *filename) {
@@ -95,7 +145,7 @@ char* expand_tilde(const char *path) {
 // Modified function to build absolute path or URL
 char* build_absolute_path_or_url(const char *path) {
     // Check if path is a URL
-    if (strncmp(path, "https://", 8) == 0 || strncmp(path, "http://", 7) == 0 || strncmp(path, "file://", 7) == 0) {
+    if (strncmp(path, "https://", 8) == 0 || strncmp(path, "http://", 7) == 0 || strncmp(path, "magnet:", 7) == 0 || strncmp(path, "file://", 7) == 0) {
         char *url = strdup(path);
         return url; // Return the URL as-is
     }
@@ -129,39 +179,47 @@ typedef struct {
 } Opener;
 
 
-void launch_opener_with_files(Opener opener, char **file_paths) {
-    // Construct the swaymsg argument string
-    char sway_arg[128]; // Ensure this is large enough for the expected strings
-    snprintf(sway_arg, sizeof(sway_arg), "%s focus", opener.criteria);
+int run_cmd(char **cmd_args, int wait) {
+    signal(SIGCHLD, wait ? SIG_DFL: SIG_IGN);
 
-    char *sway[] = {"swaymsg", sway_arg, NULL};
-
-    // Launch swaymsg to focus the app based on the criteria
-    pid_t pid_sway = fork();
-    if (pid_sway == 0) {
-        execvp(sway[0], sway);
-        printf("Unknown command: %s\n", sway[0]);
+    pid_t pid = fork();
+    if (pid == 0) {
+        execvp(cmd_args[0], cmd_args);
+        printf("Unknown command: %s\n", cmd_args[0]);
         exit(1);
-    } else if (pid_sway > 0) {
-        wait(NULL);  // Optionally wait for swaymsg to complete
+    } else if (pid > 0) {
+        if (wait) {
+            int status;
+            waitpid(pid, &status, 0); // Wait for the child process to finish
+            if (WIFEXITED(status)) {
+                int exit_status = WEXITSTATUS(status);
+                // printf("Child exited with status %d\n", exit_status);
+                return (exit_status == 0) ? 1 : 0; // Return 1 on success, 0 otherwise
+            } else {
+                // printf("Child did not exit normally\n");
+                return 0; // Return 0 for abnormal exit
+            }
+        }
     } else {
-        perror("fork failed for swaymsg");
+        perror("fork failed for opener");
         exit(1);
     }
+    return 1;
+}
 
-    // Prepare to launch the actual opener
+void launch_opener_with_files(char **command, char **file_paths, int wait) {
     int arg_count;
-    for (arg_count = 0; opener.command[arg_count] != NULL; arg_count++); // Count the number of opener arguments
+    for (arg_count = 0; command[arg_count] != NULL; arg_count++); // Count the number of opener arguments
 
     // Count the number of file paths
     int file_count;
     for (file_count = 0; file_paths[file_count] != NULL; file_count++);
 
-    char **args = malloc((arg_count + file_count + 1) * sizeof(char*)); // +1 for the NULL terminator
+    // char **args = malloc((arg_count + file_count + 1) * sizeof(char*)); // +1 for the NULL terminator
+    char *args[MAX_ARGS + 1]; // +1 for the NULL terminator
 
-    // Copy opener arguments to args
     for (int i = 0; i < arg_count; i++) {
-        args[i] = opener.command[i];
+        args[i] = command[i];
     }
 
     // Add file paths to args
@@ -170,23 +228,9 @@ void launch_opener_with_files(Opener opener, char **file_paths) {
     }
 
     args[arg_count + file_count] = NULL; // NULL-terminate the arguments array
-
-    // Launch the actual opener
-    pid_t pid_opener = fork();
-    if (pid_opener == 0) {
-        execvp(args[0], args);
-        printf("Unknown command: %s\n", opener.command[0]);
-        exit(1);
-    } else if (pid_opener > 0) {
-        // Optionally, handle or ignore the SIGCHLD signal here
-    } else {
-        perror("fork failed for opener");
-        exit(1);
-    }
-
-    free(args); // Free the arguments array
-
+    run_cmd(args, wait);
 }
+
 
 char** process_argv(int argc, char **argv, int *count);
 char** process_stdin(int *count);
@@ -220,7 +264,6 @@ char** process_stdin(int *count) {
 }
 
 int main(int argc, char **argv) {
-    signal(SIGCHLD, SIG_IGN); // Ignore SIGCHLD
     int debug_mode = 0;
 
     // Check if the first argument is --debug
@@ -275,7 +318,7 @@ int main(int argc, char **argv) {
     char *multimedia_files[total_count];
 
     const char *book_formats = getenv("_FILE_OPENER_BOOK_FORMATS") ? : "";
-    char *book_command[] = {"zathura", NULL};
+    char *book_command[] = {"/usr/bin/zathura", NULL};
     Opener book_opener = {book_command, "[app_id=^org.pwmt.zathura$]"};
     char *book_files[total_count];
 
@@ -303,6 +346,7 @@ int main(int argc, char **argv) {
     char *other_files[total_count];
 
 
+    char *magnet_files[total_count];
 
 
     // Handle the EDITOR environment variable
@@ -322,7 +366,7 @@ int main(int argc, char **argv) {
     }
 
 
-    int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0, disabled_count = 0;
+    int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0, disabled_count = 0, magnet_count = 0;
 
     for (int i = 0; i < total_count; i++) {
         if (!inputs[i] || inputs[i][0] == '\0') {
@@ -351,8 +395,15 @@ int main(int argc, char **argv) {
             other_files[other_count++] = strdup(local_path); // Duplicate the path if you're going to free input later
             continue;
         }
+
         if (strncmp(input, "https://", 8) == 0 || strncmp(input, "http://", 7) == 0) {
-            url_files[url_count++] = strdup(input); // Duplicate the URL if you're going to free input later
+            url_files[url_count++] = strdup(input);
+            continue;
+        }
+
+        if (strncmp(input, "magnet:", 7) == 0) {
+            magnet_files[magnet_count++] = strdup(input);
+            continue;
         }
 
         const char *ext = get_file_extension(input);
@@ -379,7 +430,6 @@ int main(int argc, char **argv) {
         }
 
     }
-
     for (int i = 0; i < disabled_count; i++) {
         fprintf(stderr, "%s\n", disabled_files[i]);
     }
@@ -394,25 +444,86 @@ int main(int argc, char **argv) {
         close(dev_null_fd);
     }
 
+    magnet_files[magnet_count] = NULL;
+    if(magnet_count > 0) {
+        char *torrent_command[] = {"transmission.sh", NULL};
+        launch_opener_with_files(torrent_command, magnet_files, debug_mode);
+    }
+
 
     multimedia_files[multimedia_count] = NULL;
-    if (multimedia_count > 0) launch_opener_with_files(multimedia_opener, multimedia_files);
+    if (multimedia_count > 0) {
+        char *swaymsg[] = {"swaymsg", multimedia_opener.criteria, "focus", NULL};
+        if (run_cmd(swaymsg, 1)) {
+            const char *socket_path = "/tmp/mpvsocket";
+            for (int i = 0; i < multimedia_count; i++) {
+                mpv_message(socket_path, multimedia_files[i]);
+            }
+        } else {
+            launch_opener_with_files(multimedia_opener.command, multimedia_files, debug_mode);
+        }
+    }
+
+    for (int i = 0; i < multimedia_count; i++) {
+        free(multimedia_files[i]);
+    }
 
     book_files[book_count] = NULL;
-    if (book_count > 0) launch_opener_with_files(book_opener, book_files);
+    if (book_count > 0) {
+        for (int i = 0; i < book_count; i++) {
+            char *book = book_files[i];
+            char *book_basename = get_basename(book);
+
+            char criteria[128] = "";
+            snprintf(criteria, 128, "[app_id=\"^org.pwmt.zathura$\" title=\"^%s \"]", book_basename);
+            char *swaymsg[] = {"swaymsg", criteria, "focus", NULL};
+
+            if (!run_cmd(swaymsg, 1)) {
+                char *book_a[] = {book, NULL};
+                launch_opener_with_files(book_opener.command, book_a, debug_mode);
+            }
+        }
+    }
+    for (int i = 0; i < book_count; i++) {
+        free(book_files[i]);
+    }
 
     web_files[web_count] = NULL;
-    if (web_count > 0) launch_opener_with_files(firefox_opener, web_files);
+    if (web_count > 0) {
+        char *swaymsg[] = {"swaymsg", firefox_opener.criteria, "focus", NULL};
+        run_cmd(swaymsg, 0);
+        launch_opener_with_files(firefox_opener.command, web_files, debug_mode);
+    }
+    for (int i = 0; i < web_count; i++) {
+        free(web_files[i]);
+    }
 
     url_files[url_count] = NULL;
-    if (url_count > 0) launch_opener_with_files(firefox_opener, url_files);
+    if (url_count > 0) {
+        char *swaymsg[] = {"swaymsg", firefox_opener.criteria, "focus", NULL};
+        run_cmd(swaymsg, 0);
+        launch_opener_with_files(firefox_opener.command, url_files, debug_mode);
+    }
+    for (int i = 0; i < url_count; i++) {
+        free(url_files[i]);
+    }
 
     picture_files[picture_count] = NULL;
-    if (picture_count > 0) launch_opener_with_files(picture_opener, picture_files);
+    if (picture_count > 0) launch_opener_with_files(picture_opener.command, picture_files, debug_mode);
+    for (int i = 0; i < picture_count; i++) {
+        free(picture_files[i]);
+    }
 
     other_files[other_count] = NULL;
-    if (other_count > 0) launch_opener_with_files(sublime_opener, other_files); // Assuming editor_opener for files not matched by any type
-
+    if (other_count > 0) {
+        char *swaymsg[] = {"swaymsg", sublime_opener.criteria, "focus", NULL};
+        if (!run_cmd(swaymsg, 1)) {
+            const char *json_string = "{\"app_id\": \"sublime_text\", \"rules\": [\"move to workspace 2\", \"focus\", \"mark --add ctrl+2__dynamic_focus__\"]}";
+            char *launch[] = {"swaymsg", "-t" "send_tick", (char *)json_string, NULL};
+            run_cmd(launch, 1);
+        }
+        launch_opener_with_files(sublime_opener.command, other_files, debug_mode);
+    }
     for (int i = 0; i < other_count; i++) {
         free(other_files[i]);
     }
@@ -421,6 +532,5 @@ int main(int argc, char **argv) {
         free(inputs[i]);
     }
     free(inputs);
-
-    return 0;
+    return disabled_count;
 }
