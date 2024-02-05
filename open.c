@@ -11,12 +11,13 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <ctype.h>
-
+#include <sys/stat.h>
 
 #define MAX_ARGS 256 // Define a maximum number of arguments
 #define MAX_EXT_LENGTH 10
 #define MAX_PATH_LENGTH 1024
 #define MAX_INPUTS 1024
+#define ERROR_RETURN 128
 
 void mpv_message(const char *socket_path, const char *path) {
     char message[1024];
@@ -65,12 +66,31 @@ char* get_basename(char *path) {
     }
 }
 
-// Function to get the file extension
-const char *get_file_extension(const char *filename) {
+
+const char *get_file_extension(const char *fullname) {
+    const char *filename_with_slash = strrchr(fullname, '/');
+    if (!filename_with_slash) return "";
+    int length = strlen(filename_with_slash);
+    if (length < 2) {
+        return "";
+    }
+
+    char *filename = strdup(filename_with_slash + 1); // remove possibly leading .
+    if (!filename) return ""; // Check strdup succeeded
+
     const char *dot = strrchr(filename, '.');
-    if(!dot || dot == filename) return "";
-    return dot + 1;
+    if (!dot || dot == filename) { // Check dot exists and is not the first character
+        free(filename);
+        return "";
+    }
+
+    char *extension = strdup(dot + 1); // Duplicate the extension part
+    free(filename); // Now we can free filename safely
+
+    if (!extension) return ""; // Check strdup succeeded
+    return extension;
 }
+
 
 // Function to convert a string to lower case
 char* str_to_lower(const char* str) {
@@ -169,11 +189,6 @@ char* expand_tilde(const char *path) {
 
 // Modified function to build absolute path or URL
 char* build_absolute_path_or_url(const char *path) {
-    // Check if path is a URL
-    if (strncmp(path, "https://", 8) == 0 || strncmp(path, "http://", 7) == 0 || strncmp(path, "magnet:", 7) == 0 || strncmp(path, "file://", 7) == 0) {
-        char *url = strdup(path);
-        return url; // Return the URL as-is
-    }
 
     char *expanded_path = expand_tilde(path);
     if (!expanded_path) {
@@ -200,7 +215,7 @@ char* build_absolute_path_or_url(const char *path) {
 
 typedef struct {
     char **command; // The command and its arguments
-    char *criteria; // The criteria for swaymsg
+    char **criteria; // The criteria for swaymsg
 } Opener;
 
 
@@ -230,6 +245,26 @@ int run_cmd(char **cmd_args, int wait) {
         exit(1);
     }
     return 1;
+}
+
+
+int run_sway(char **cmd_args) {
+    if (getenv("WAYLAND_DISPLAY") == NULL) {
+        return 1;
+    }
+
+    int arg_count;
+    for (arg_count = 0; cmd_args[arg_count] != NULL; arg_count++); // Count the number of opener arguments
+
+    char *swaymsg[arg_count + 3]; // +1 for "swaymsg" and +1 for NULL terminator
+    swaymsg[0] = "swaymsg";
+    swaymsg[1] = "-q";
+
+    for (int i = 0; i < arg_count; i++) {
+        swaymsg[i + 2] = cmd_args[i];
+    }
+    swaymsg[arg_count + 2] = NULL; // Correct index for NULL terminator
+    return run_cmd(swaymsg, 1); // Assume this function runs the command
 }
 
 void launch_opener_with_files(char **command, char **file_paths, int wait) {
@@ -274,6 +309,23 @@ char** process_argv(int argc, char **argv, int *count) {
     return inputs;
 }
 
+
+void replace_percent20_with_space(char *str) {
+    char *read_ptr = str;
+    char *write_ptr = str;
+
+    // Loop through the string
+    while (*read_ptr != '\0') {
+        if (strncmp(read_ptr, "%20", 3) == 0) {  // Check for "%20"
+            *write_ptr++ = ' '; // Replace with space
+            read_ptr += 3; // Move past "%20"
+        } else {
+            *write_ptr++ = *read_ptr++; // Copy other characters
+        }
+    }
+    *write_ptr = '\0'; // Null-terminate the modified string
+}
+
 char** process_stdin(int *count) {
     char **inputs = (char**)malloc(MAX_INPUTS * sizeof(char*));
     *count = 0; // Initialize count to 0
@@ -288,16 +340,56 @@ char** process_stdin(int *count) {
     return inputs;
 }
 
-int main(int argc, char **argv) {
-    int debug_mode = 0;
 
-    // Check if the first argument is --debug
-    if (argc > 1 && strcmp(argv[1], "--debug") == 0) {
-        debug_mode = 1;
+int is_directory(const char *path) {
+    struct stat path_stat;
+    if (stat(path, &path_stat) != 0) {
+        perror("stat"); // Handle error, e.g., file doesn't exist or no access
+        return -1; // Indicate error
+    }
+
+    return S_ISDIR(path_stat.st_mode);
+}
+
+int main(int argc, char **argv) {
+    int attach_mode = 0;
+    int only_files = 0;
+    int error_return = 0;
+
+    if (getenv("WAYLAND_DISPLAY") == NULL) {
+        attach_mode = 1;
+    }
+
+    // Check if the first argument is --attach
+    if (argc > 1 && strcmp(argv[1], "--attach") == 0) {
+        attach_mode = 1;
         // Shift the argv array and decrease argc
         argc--;
         argv++;
-    } else {
+    }
+
+    if (argc > 1 && strcmp(argv[1], "--only-files") == 0) {
+        only_files = 1;
+        // Shift the argv array and decrease argc
+        argc--;
+        argv++;
+    }
+
+    if (argc > 1 && strcmp(argv[1], "--attach") == 0) {
+        only_files = 1;
+        // Shift the argv array and decrease argc
+        argc--;
+        argv++;
+    }
+
+    if (argc > 1 && strcmp(argv[1], "--only-files") == 0) {
+        only_files = 1;
+        // Shift the argv array and decrease argc
+        argc--;
+        argv++;
+    }
+
+    if (!attach_mode) {
         // Redirect stdout and stderr to /dev/null
         int dev_null_fd = open("/dev/null", O_WRONLY);
         if (dev_null_fd == -1) {
@@ -316,6 +408,10 @@ int main(int argc, char **argv) {
     }
 
     int total_count = argv_input_count + stdin_input_count;
+
+    if (total_count == 0)
+        return ERROR_RETURN;
+
     char **inputs = (char **)malloc(total_count * sizeof(char *));
     if (!inputs) {
         perror("Failed to allocate memory for inputs");
@@ -339,85 +435,61 @@ int main(int argc, char **argv) {
 
     const char *multimedia_formats = getenv("_FILE_OPENER_MULTIMEDIA_FORMATS") ? : "";
     char *multimedia_command[] = {"mpv", NULL};
-    Opener multimedia_opener = {multimedia_command, "[app_id=^mpv$]"};
+    char *multimedia_criteria[] = {"[app_id=^mpv$]", "focus", NULL};
+    Opener multimedia_opener = {multimedia_command, multimedia_criteria};
     char *multimedia_files[total_count];
 
     const char *book_formats = getenv("_FILE_OPENER_BOOK_FORMATS") ? : "";
     char *book_command[] = {"/usr/bin/zathura", NULL};
-    Opener book_opener = {book_command, "[app_id=^org.pwmt.zathura$]"};
+    char *book_criteria[] = {"[app_id=^org.pwmt.zathura$]", "focus", NULL};
+    Opener book_opener = {book_command, book_criteria};
     char *book_files[total_count];
 
     const char *picture_formats = getenv("_FILE_OPENER_PICTURE_FORMATS") ? : "";
     char *picture_command[] = {"eog", NULL};
-    Opener picture_opener = {picture_command, "[app_id=^eog$]"};
+    char *picture_criteria[] = {"[app_id=^eog$]", "focus", NULL};
+    Opener picture_opener = {picture_command, picture_criteria};
     char *picture_files[total_count];
 
     const char *libreoffice_formats = getenv("_FILE_OPENER_LIBREOFFICE_FORMATS") ? : "";
     char *libreoffice_command[] = {"/usr/bin/libreoffice", "--norestore", NULL};
-    Opener libreoffice_opener = {libreoffice_command, "[app_id=^libreoffice$]"};
+    char *libreoffice_criteria[] = {"[app_id=^libreoffice$]", "focus", NULL};
+    Opener libreoffice_opener = {libreoffice_command, libreoffice_criteria};
     char *libreoffice_files[total_count];
 
     const char *web_formats = getenv("_FILE_OPENER_WEB_FORMATS") ? : "";
     char *firefox_command[] = {"firefox", NULL};
-    Opener firefox_opener = {firefox_command, "[app_id=^firefox$]"};
+    char *firefox_criteria[] = {"app_id=^firefox$","focus", NULL};
+    Opener firefox_opener = {firefox_command, firefox_criteria};
     char *web_files[total_count];
     char *url_files[total_count];
 
     const char *archive_formats = getenv("_FILE_OPENER_ARCHIVE_FORMATS") ? : "";
 
+    char *editor_command[3];  // Fixed size array, large enough to hold all possible arguments
+    char *editor_criteria[] = {"[app_id=^sublime_text$]","focus", NULL};
+    if (getenv("WAYLAND_DISPLAY") == NULL) {
+        editor_command[0] = "nvim";
+        editor_command[1] = NULL;
+    } else {
+        int argcount = 2 + attach_mode;
+        editor_command[0] = "/opt/sublime_text/sublime_text";
+        editor_command[1] = attach_mode ? "--wait" : NULL;
+        editor_command[2] = NULL;
+    }
 
-    char *sublime_command[] = {"/opt/sublime_text/sublime_text", NULL};
-    Opener sublime_opener = {sublime_command, "[app_id=^sublime_text$]"};
+    Opener sublime_opener = {editor_command, editor_criteria};
     char *other_files[total_count];
 
 
     char *magnet_files[total_count];
 
-
-    // Handle the EDITOR environment variable
-    char *editor_env = getenv("EDITOR");
-    char *editor_opener[10]; // Assuming the max number of arguments won't exceed 10
-    int editor_arg_count = 0;
-    if (editor_env != NULL) {
-        char *editor_env_dup = strdup(editor_env); // Duplicate the string for strtok
-        char *token = strtok(editor_env_dup, " ");
-        while (token != NULL && editor_arg_count < 9) {
-            editor_opener[editor_arg_count++] = token;
-            token = strtok(NULL, " ");
-        }
-        editor_opener[editor_arg_count] = NULL; // NULL-terminate the array
-    } else {
-        printf("No default editor set. Cannot open text files.\n");
-    }
-
-
-    int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0, disabled_count = 0, magnet_count = 0;
+    int multimedia_count = 0, book_count = 0, picture_count = 0, other_count = 0, web_count = 0, url_count = 0, disabled_count = 0, magnet_count = 0, libreoffice_count = 0;
 
     for (int i = 0; i < total_count; i++) {
-        if (!inputs[i] || inputs[i][0] == '\0') {
-            continue;
-        }
+        char *input = inputs[i];
 
-        char *input = build_absolute_path_or_url(inputs[i]);
-
-        if (debug_mode) {
-            fprintf(stdout, "file: '%s', input: '%s'\n", input, inputs[i]);
-        }
-
-        if(!input) {
-            continue;
-        }
-
-        if (strncmp(input, "file://", 7) == 0) {
-            // Handle file:// URLs
-            char *local_path = input + 7; // Skip the "file://" part
-            char *host_end = strchr(local_path, '/'); // Find the start of the actual path
-            if (host_end) {
-                // If there's a host part, skip it. Otherwise, local_path is already the path
-                local_path = host_end;
-            }
-            const char *ext = get_file_extension(local_path);
-            other_files[other_count++] = strdup(local_path); // Duplicate the path if you're going to free input later
+        if (!input || input[0] == '\0') {
             continue;
         }
 
@@ -431,7 +503,29 @@ int main(int argc, char **argv) {
             continue;
         }
 
+        if (strncmp(input, "file://", 7) == 0) {
+            input += 7;  // Skip the "file://" part
+            char *host_end = strchr(input, '/');
+            if (host_end) {
+                // If there's a host part in the URL, skip it. Otherwise, input is already the path
+                input = host_end;
+            }
+            replace_percent20_with_space(input); // Replace "%20" with spaces for file paths
+        }
+
+        input = build_absolute_path_or_url(input);
+
+        if(!input) {
+            continue;
+        }
+
+        if (only_files && is_directory(input) == 1) {
+            disabled_files[disabled_count++] = input;
+            continue;
+        }
+
         const char *ext = get_file_extension(input);
+
 
         if (is_extension_in_list(ext, multimedia_formats)) {
             multimedia_files[multimedia_count++] = input;
@@ -441,25 +535,20 @@ int main(int argc, char **argv) {
             web_files[web_count++] = input;
         } else if(is_extension_in_list(ext, picture_formats)) {
             picture_files[picture_count++] = input;
+        } else if(is_extension_in_list(ext, libreoffice_formats)) {
+            libreoffice_files[libreoffice_count++] = input;
+        } else if(is_extension_in_list(ext, exclude_suffixes)) {
+            disabled_files[disabled_count++] = input;
         } else {
-
-            if(is_extension_in_list(ext, exclude_suffixes)) {
-                disabled_files[disabled_count++] = input;
-                if (debug_mode) {
-                    fprintf(stderr, "Skipping excluded file type: %s\n", input);
-                }
-                continue;
-            }
-
             other_files[other_count++] = input;
         }
-
     }
+
     for (int i = 0; i < disabled_count; i++) {
         fprintf(stderr, "%s\n", disabled_files[i]);
     }
 
-    if (!debug_mode) {
+    if (!attach_mode) {
         int dev_null_fd = open("/dev/null", O_WRONLY);
         if (dev_null_fd == -1) {
             perror("Failed to open /dev/null");
@@ -472,20 +561,19 @@ int main(int argc, char **argv) {
     magnet_files[magnet_count] = NULL;
     if(magnet_count > 0) {
         char *torrent_command[] = {"transmission.sh", NULL};
-        launch_opener_with_files(torrent_command, magnet_files, debug_mode);
+        launch_opener_with_files(torrent_command, magnet_files, attach_mode);
     }
 
 
     multimedia_files[multimedia_count] = NULL;
     if (multimedia_count > 0) {
-        char *swaymsg[] = {"swaymsg", multimedia_opener.criteria, "focus", NULL};
-        if (run_cmd(swaymsg, 1)) {
+        if (run_sway(multimedia_opener.criteria)) {
             const char *socket_path = "/tmp/mpvsocket";
             for (int i = 0; i < multimedia_count; i++) {
                 mpv_message(socket_path, multimedia_files[i]);
             }
         } else {
-            launch_opener_with_files(multimedia_opener.command, multimedia_files, debug_mode);
+            launch_opener_with_files(multimedia_opener.command, multimedia_files, attach_mode);
         }
     }
 
@@ -499,13 +587,12 @@ int main(int argc, char **argv) {
             char *book = book_files[i];
             char *book_basename = get_basename(book);
 
-            char criteria[128] = "";
+            char criteria[44+strlen(book_basename)];
             snprintf(criteria, sizeof(criteria), "[app_id=\"^org.pwmt.zathura$\" title=\"^%s \"]", book_basename);
-            char *swaymsg[] = {"swaymsg", criteria, "focus", NULL};
-
-            if (!run_cmd(swaymsg, 1)) {
+            char *launch[] = {(char *)criteria, "focus", NULL};
+            if (!run_sway(launch)) {
                 char *book_a[] = {book, NULL};
-                launch_opener_with_files(book_opener.command, book_a, debug_mode);
+                launch_opener_with_files(book_opener.command, book_a, attach_mode);
             }
         }
     }
@@ -515,9 +602,8 @@ int main(int argc, char **argv) {
 
     web_files[web_count] = NULL;
     if (web_count > 0) {
-        char *swaymsg[] = {"swaymsg", firefox_opener.criteria, "focus", NULL};
-        run_cmd(swaymsg, 0);
-        launch_opener_with_files(firefox_opener.command, web_files, debug_mode);
+        run_sway(firefox_opener.criteria);
+        launch_opener_with_files(firefox_opener.command, web_files, attach_mode);
     }
     for (int i = 0; i < web_count; i++) {
         free(web_files[i]);
@@ -525,29 +611,33 @@ int main(int argc, char **argv) {
 
     url_files[url_count] = NULL;
     if (url_count > 0) {
-        char *swaymsg[] = {"swaymsg", firefox_opener.criteria, "focus", NULL};
-        run_cmd(swaymsg, 0);
-        launch_opener_with_files(firefox_opener.command, url_files, debug_mode);
+        run_sway(firefox_opener.criteria);
+        launch_opener_with_files(firefox_opener.command, url_files, attach_mode);
     }
     for (int i = 0; i < url_count; i++) {
         free(url_files[i]);
     }
 
     picture_files[picture_count] = NULL;
-    if (picture_count > 0) launch_opener_with_files(picture_opener.command, picture_files, debug_mode);
+    if (picture_count > 0) launch_opener_with_files(picture_opener.command, picture_files, attach_mode);
     for (int i = 0; i < picture_count; i++) {
         free(picture_files[i]);
     }
 
+    libreoffice_files[libreoffice_count] = NULL;
+    if (libreoffice_count > 0) launch_opener_with_files(libreoffice_opener.command, libreoffice_files, attach_mode);
+    for (int i = 0; i < libreoffice_count; i++) {
+        free(libreoffice_files[i]);
+    }
+
     other_files[other_count] = NULL;
     if (other_count > 0) {
-        char *swaymsg[] = {"swaymsg", sublime_opener.criteria, "focus", NULL};
-        if (!run_cmd(swaymsg, 1)) {
+        if (!run_sway(sublime_opener.criteria)) {
             const char *json_string = "{\"app_id\": \"sublime_text\", \"rules\": [\"move to workspace 2\", \"focus\", \"mark --add ctrl+2__dynamic_focus__\"]}";
-            char *launch[] = {"swaymsg", "-t" "send_tick", (char *)json_string, NULL};
-            run_cmd(launch, 1);
+            char *launch[] = {"-t" "send_tick", (char *)json_string, NULL};
+            run_sway(launch);
         }
-        launch_opener_with_files(sublime_opener.command, other_files, debug_mode);
+        launch_opener_with_files(sublime_opener.command, other_files, attach_mode);
     }
     for (int i = 0; i < other_count; i++) {
         free(other_files[i]);
@@ -556,6 +646,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < total_count; i++) {
         free(inputs[i]);
     }
+
     free(inputs);
-    return disabled_count;
+    return disabled_count + error_return;
 }

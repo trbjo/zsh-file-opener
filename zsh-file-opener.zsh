@@ -2,21 +2,38 @@
 
 
 file_opener(){
-    [[ -d "${@:-.}" ]] && cd $@ && return
-    open $@
-    swaymsg -q -- '[app_id="^popup$"] move scratchpad'
+    local oldpwd="$PWD"
+    integer count
+    { open --only-files $@ && swaymsg -q -- '[app_id="^popup$"] move scratchpad'
+    } 2>&1 >&- > /dev/null | () {
+        local file destination
+        while read file; do
+            [[ -d "${file}" ]] && cd "$file" && continue
+            case "${file:e:l}" in
+            (${~_FILE_OPENER_ARCHIVE_FORMATS//,/|})
+                cd "$oldpwd"
+                destination=$(extract.sh "$file" "${explicit_extract_location}")
+                _enum_exit_code $? "$file" "$destination" && cd "$destination"
+                ;;
+            (*)
+                count+=1
+                print $file
+                ;;
+           esac
+        done
+    }
+    return $count
 }
+
 alias u='file_opener'
 alias -g U='| open'
-
 zstyle ':completion:*:*:file_opener:*:*' file-patterns '^*.(${_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})' '*(D):all-files'
 zstyle ':completion:*:*:file_opener:*:*' ignore-line other
 
-return
 if [[ $SSH_TTY ]]; then
     export EDITOR='rmate -w'
     export VISUAL='rmate -w'
-    _ZSH_FILE_OPENER_EXCLUDE_SUFFIXES+=",$_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS,$_ZSH_FILE_OPENER_BOOK_FORMATS,$_ZSH_FILE_OPENER_PICTURE_FORMATS"
+    export _FILE_OPENER_EXCLUDE_SUFFIXES+=",$_FILE_OPENER_MULTIMEDIA_FORMATS,$_FILE_OPENER_BOOK_FORMATS,$_FILE_OPENER_PICTURE_FORMATS"
     alias -g SS=' |& rmate -'
 
     if [[ ! -f "$HOME/.local/bin/rmate" ]]; then
@@ -43,149 +60,88 @@ if [[ $SSH_TTY ]]; then
     }
 fi
 
+    # if [[ "$BUFFER" ]]; then
+        # if [[ $ST_ALIAS ]] && [[ "${LBUFFER: -$ST_ALIAS_LENGTH}" == " $ST_ALIAS" ]] || [[ $LBUFFER == "$ST_ALIAS" ]]; then
+            # local file
+            # read file < $__subl_file_path
+            # LBUFFER="${LBUFFER[1,-$ST_ALIAS_LENGTH]}$file "
+            # return 0
+        # fi
+        #
+        # return 0
+    # fi
 
-lolfile_opener() {
-    for file in "${array[@]}"; do
-        [[ "$file" == file:/* ]] && file="/${file#file://*/*}"
-        case "${file:e:l}" in
-            (${~_ZSH_FILE_OPENER_EXCLUDE_SUFFIXES//,/|})
-                print $file
-               [[ $- == *i* ]] && disabled+=("${file:A:q}") ;;
-            (${~_ZSH_FILE_OPENER_ARCHIVE_FORMATS//,/|})
-                arcs+=(${file:a})
-                [[ "${#@}" -eq 2 ]] && { local explicit_extract_location="$2"; break } ;;
-            (${~_ZSH_FILE_OPENER_MULTIMEDIA_FORMATS//,/|})
-                movs+=("${file:A:q}") ;;
-            (${~_ZSH_FILE_OPENER_BOOK_FORMATS//,/|})
-                swaymsg -q "[app_id=\"^org.pwmt.zathura$\" title=\"^${(q)file##*/}\ \[\"] focus" || pdfs+=("${file:A:q}") ;;
-            (${~_ZSH_FILE_OPENER_PICTURE_FORMATS//,/|})
-                pics+=("${file:A:q}") ;;
-            (${~webz//,/|})
-                webs+=("${file:A:q}") ;;
-            (${~_ZSH_FILE_OPENER_LIBREOFFICE_FORMATS//,/|})
-                libre+=("${file:A:q}") ;;
-            (${~_ZSH_FILE_OPENER_GNUMERIC_FORMATS//,/|})
-                gnumeric+=("${file:A:q}") ;;
-            (*)
-                webs+=("$file") && continue
-                [[ "${#@}" -eq 2 ]] && [ $2 -gt 0 2>/dev/null ] && docs+=("${file:A:q}":$2) && break
-                docs+=("${file:A:q}") ;;
-        esac
-    done
 
-    [[ ${dirs} ]] && {
-        if [[ ${#dirs} -eq 1 ]]; then
-            # print lol
-            if [[ $- == *i* ]]; then # as func
-                cd "$dirs" && ret=${ret:-0}
-            else # as file
-                footclient -D $dirs
-            fi
-        else
-            local -aU color_dirs
-            for dir in ${dirs}; do
-                color_dirs+="$(_colorizer $dir)"
+fzy_prompt='${_PROMPT}%F{green}${PROMPT_SUCCESS_ICON} %f'
+function _autosuggest_execute_or_clear_screen_or_ls() {
+
+    if [[ $BUFFER ]]; then
+        if [[ $POSTDISPLAY ]]; then
+            BUFFER+="${POSTDISPLAY}"
+            unset POSTDISPLAY
+        fi
+        zle .accept-line
+        return
+    fi
+
+    local garbage termpos
+    print -n "\x1b[3J\x1b[6n"        # clear scrollback buffer and ask the terminal for position
+    read -d\[ garbage </dev/tty      # discard the first part of the response
+    read -s -d R termpos </dev/tty   # store the position in bash variable 'termpos'
+    typeset -i col="${termpos%%;*}"
+    (( col <= ${PROMPT_WS_SEP+1} +1)) && {
+        z | fzy --keep-output --show-info --prompt="$(print -Pn ${(e)fzy_prompt})" | () {
+            while read file; do
+                [[ -d "${file/#\~/${HOME}}" ]] && cd "${file/#\~/${HOME}}"
             done
-            print "Cannot enter multiple directories: ${color_dirs}"
-            ret=1
-        fi
+        }
+
+        zle fzf-redraw-prompt
+    } || {
+        printf "\x1b[?25l\x1b[H\x1b[2J\x1b[?25h"
+        zle .reset-prompt
     }
-
-    [[ ${disabled} ]] && {
-        local -a disabled_files
-        local disabled_file joined
-        for disabled_file in ${disabled}; do
-            disabled_files+="$(_colorizer "$disabled_file")"
-        done
-        printf -v joined '%s\e[32m\e[1m,\e[0m ' "${disabled_files[@]}"
-        print "File opener is disabled for: ${joined}"
-        ret=1
-    }
-
-    [[ ${movs} ]] && () {
-        if pgrep -x mpv > /dev/null 2>&1; then
-            [[ ! -S /tmp/mpvsocket ]] && print "mpvsocket not found" && ret=1 && return
-            for movie in ${movs[@]}; do
-                print "loadfile ${(qq)movie} append" | socat - /tmp/mpvsocket
-                notify-send.sh "${movie##*/}" "Playing next…" --default-action="swaymsg -q '[app_id=^mpv$] focus'"
-            done
-        else
-            case "$(aplay -l)" in
-            *": BT600 ["*)
-                local audio='--audio-device=alsa/iec958:CARD=BT600,DEV=0'
-                ;;
-            *": BT700 ["*)
-                local audio='--audio-device=alsa/iec958:CARD=BT700,DEV=0'
-                ;;
-             *": Audio ["*)
-                local audio='--audio-device=alsa/default:CARD=Audio'
-                ;;
-            esac
-
-            swaymsg -q -- exec \'/usr/bin/mpv $audio ${movs}\'
-        fi
-    }
-
-    [[ ${pdfs} ]] && {
-        local pdf_str=""
-        pdfs=("${(@on)pdfs}")
-        for pdf in $pdfs; do
-            pdf_str+="/usr/bin/zathura $pdf &!; "
-        done
-        swaymsg -q -- exec \'$pdf_str\'
-    }
-
-    [[ ${pics} ]] && {
-        pics=("${(@on)pics}")
-        # [[ ${#pics} -eq 1 ]] && swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics%/*} -n "${pics}"\' ||\
-        # swaymsg -q -- exec \'/usr/bin/imv-wayland ${pics}\'
-        swaymsg -q -- exec \'eog $pics\'
-    }
-
-    [[ ${libre} ]] && {
-        swaymsg -q -- "exec /usr/bin/libreoffice --norestore ${libre[@]}; [app_id=^libreoffice] focus"
-    }
-    [[ ${gnumeric} ]] && {
-        swaymsg -q -- "exec /usr/bin/gnumeric ${gnumeric[@]}; [app_id=^gnumeric] focus"
-    }
-
-
-    [[ ${webs} ]] && {
-        local web
-        typeset -a torrents
-
-        for web in $webs; do
-            if [[ $web == magnet* ]]; then
-                torrents+=("${web}")
-            else
-                firefox ${webs[@]}
-            fi
-        done
-        [[ ${torrents} ]] && transmission.sh ${torrents}
-    }
-
-
-    [[ ${arcs} ]] && {
-        typeset -a extract_msg
-        local arc destination exit_code
-        for arc in "${arcs[@]}"; do
-            destination=$(__extracter_wrapper "$arc" "${explicit_extract_location}")
-            exit_code="$?"
-            (( exit_code > 2 )) && ret=5
-            extract_msg+=$(_enum_exit_code $exit_code "$arc" "$destination")
-        done
-        if [[ ${#arcs[@]} -eq 1 ]] && [[ -d $destination ]] && [[ ${ret:-0} == 0 ]]; then
-            cd "$destination"
-        fi
-        local msg
-        for msg in ${extract_msg[@]}; do
-            print "$msg"
-        done
-    } < $TTY
-
-    [[ ${docs} ]] && _docs_opener ${docs}
-
-    return ${ret:-0}
 }
+zle -N _autosuggest_execute_or_clear_screen_or_ls
+bindkey -e '\e' _autosuggest_execute_or_clear_screen_or_ls
 
-[[ ! $- == *i* ]] && file_opener "$@"
+zmodload -i zsh/complist
+bindkey -M menuselect '\e' .accept-line
+
+st_helper() {
+    [[ -n "$BUFFER" ]] && LBUFFER+=" " && return
+    integer isdir=1
+    while (( $isdir )); do
+        isdir=0
+        { { printf '\x1b[36m..\n'; ls -A --color=always --group-directories-first -1;  } | fzy --keep-output --show-info --prompt="$(print -Pn ${(e)fzy_prompt})" | sed 's/^[ \t]*//;s/[ \t]*$//' | open --only-files && swaymsg -q -- '[app_id="^popup$"] move scratchpad'
+        } 2>&1 >&- > /dev/null | () {
+            while read file; do
+                [[ -d "${file}" ]] && cd "$file" && isdir=1
+            done
+        }
+        zle fzf-redraw-prompt
+    done
+}
+zle -N st_helper
+bindkey -e " " st_helper
+
+
+go-home-widget() {
+    [[ -n "$BUFFER" ]] && LBUFFER+='`' && return
+    cd "$HOME"
+    zle fzf-redraw-prompt
+}
+zle -N go-home-widget
+bindkey '`' go-home-widget
+
+
+alias -g home='/home/tb'
+fzy-downloads-widget() {
+        ls --color=always -ct1 "$HOME/dl" | \
+            fzy --keep-output -il 30 --prompt="$(print -Pn ${(e)fzy_prompt})" | \
+            awk '{print "~/dl/" $0}' | \
+            open --only-files
+        zle fzf-redraw-prompt
+}
+zle -N fzy-downloads-widget
+bindkey '^O' fzy-downloads-widget
