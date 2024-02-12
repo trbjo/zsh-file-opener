@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 #define MAX_HASH 8179
 #define MAX_ENTRIES 10000
@@ -14,18 +15,42 @@ const size_t resetColorLen = sizeof(resetColor) - 1;
 const char pathString[] = "/\x1b[36m";
 const size_t pathStringLen = sizeof(pathString) - 1;
 
-const char gitString[] = "\x1b[1m";
+const char gitString[] = "/\x1b[36;1m";
 const size_t gitStringLen = sizeof(gitString) - 1;
 
-const char homePathString[] = "\x1b[36m~\x1b[0m";
+const char homePathString[] = "\x1b[36m~";
 const size_t homePathStringLen = sizeof(homePathString) - 1;
 
 
 int directoryHasGit(const char* path) {
     struct stat sb;
     char gitPath[1024];
+
+    // Construct the .git path
     snprintf(gitPath, sizeof(gitPath), "%s/.git", path);
-    return stat(gitPath, &sb) == 0 && S_ISDIR(sb.st_mode);
+
+    // Check the .git subdirectory
+    if (stat(gitPath, &sb) == 0) {
+        // Successfully got info about .git, check if it's a directory
+        if (S_ISDIR(sb.st_mode)) {
+            return 2; // Is a directory and has a .git subdirectory
+        }
+    } else {
+        // stat failed, check the error code
+        if (errno == ENOENT) {
+            // .git subdirectory does not exist
+            // Need to check if the parent is a directory
+            if (stat(path, &sb) == 0 && S_ISDIR(sb.st_mode)) {
+                return 1; // Parent is a directory, but no .git subdirectory
+            }
+        } else if (errno == ENOTDIR) {
+            // A part of the path is not a directory, could be any part
+            return 0; // Not a directory
+        }
+    }
+
+    // Default case: if none of the above conditions are met
+    return 0;
 }
 
 
@@ -198,9 +223,13 @@ Node* formatNode(LRUCache *cache, unsigned long homeHash, char* path) {
     strncpy(parentPath, path, lastSlash - path);
     parentPath[lastSlash - path] = '\0';
     Node* parentNode = formatNode(cache, homeHash, parentPath);
+    if (parentNode == NULL ) return NULL; // does not exist
+
+    int dirresult = directoryHasGit(path);
+    if (dirresult == 0) return NULL; // does not exist
 
     if (homeHash == hashIndex) {
-        if (directoryHasGit(path)) {
+        if (dirresult == 2) {
             memcpy(prettyPath+idx, gitString, gitStringLen);
             idx += gitStringLen;
         }
@@ -213,12 +242,13 @@ Node* formatNode(LRUCache *cache, unsigned long homeHash, char* path) {
         memcpy(prettyPath+idx, parentNode->prettyPath, parentNode->prettyPathLen);
         idx+=parentNode->prettyPathLen;
 
-        memcpy(prettyPath+idx, pathString, pathStringLen);
-        idx+=pathStringLen;
 
-        if (directoryHasGit(path)) {
+        if (dirresult == 2) {
             memcpy(prettyPath+idx, gitString, gitStringLen);
             idx += gitStringLen;
+        } else {
+            memcpy(prettyPath+idx, pathString, pathStringLen);
+            idx+=pathStringLen;
         }
 
         int lastSlashLength = strlen(lastSlash+1);
@@ -276,13 +306,9 @@ int main() {
     while (fgets(line, sizeof(line), file) && count < MAX_ENTRIES) {
         char *token = strtok(line, "|");
         if (token != NULL) {
-            struct stat sb;
-
-            if (stat(token, &sb) != 0 || !S_ISDIR(sb.st_mode)) {
-                continue;
-            }
 
             Node* result = formatNode(cache, homeHash, token);
+            if (result == NULL ) continue; // does not exist
 
             strcpy(entries[count].path, result->prettyPath);
             token = strtok(NULL, "|");

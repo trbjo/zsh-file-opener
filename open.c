@@ -344,7 +344,7 @@ char** process_stdin(int *count) {
 int is_directory(const char *path) {
     struct stat path_stat;
     if (stat(path, &path_stat) != 0) {
-        perror("stat"); // Handle error, e.g., file doesn't exist or no access
+        // perror("stat"); // Handle error, e.g., file doesn't exist or no access
         return -1; // Indicate error
     }
 
