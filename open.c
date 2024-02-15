@@ -13,7 +13,7 @@
 #include <ctype.h>
 #include <sys/stat.h>
 
-#define MAX_ARGS 256 // Define a maximum number of arguments
+#define MAX_ARGS 256
 #define MAX_EXT_LENGTH 10
 #define MAX_PATH_LENGTH 1024
 #define MAX_INPUTS 1024
@@ -276,7 +276,7 @@ void launch_opener_with_files(char **command, char **file_paths, int wait) {
     for (file_count = 0; file_paths[file_count] != NULL; file_count++);
 
     // char **args = malloc((arg_count + file_count + 1) * sizeof(char*)); // +1 for the NULL terminator
-    char *args[MAX_ARGS + 1]; // +1 for the NULL terminator
+    char *args[MAX_ARGS + 1];
 
     for (int i = 0; i < arg_count; i++) {
         args[i] = command[i];
@@ -547,6 +547,20 @@ int main(int argc, char **argv) {
     for (int i = 0; i < disabled_count; i++) {
         fprintf(stderr, "%s\n", disabled_files[i]);
     }
+
+    char *preopenenv = NULL;
+    preopenenv = getenv("FILE_OPENER_PRE_CALLBACK");
+    if (preopenenv && !disabled_count) {
+        char* preopencmd[MAX_ARGS] = {0};
+
+        char* token = strtok(preopenenv, " ");
+        for (size_t i=0; i<MAX_ARGS+1 && token != NULL; i++) {
+            preopencmd[i] = strdup(token);
+            token = strtok(NULL, " ");
+        }
+        run_sway(preopencmd);
+    }
+
 
     if (!attach_mode) {
         int dev_null_fd = open("/dev/null", O_WRONLY);

@@ -1,4 +1,5 @@
 fzy-redraw-prompt() {
+
     local precmd
     for precmd in $precmd_functions; do
         $precmd
@@ -9,8 +10,7 @@ zle -N fzy-redraw-prompt
 file_opener(){
     local oldpwd="$PWD"
     integer count
-    { open --only-files $@ && swaymsg -q -- '[app_id="^popup$"] move scratchpad'
-    } 2>&1 >&- > /dev/null | () {
+    open --only-files $@ 2>&1 >&- > /dev/null | () {
         local file destination
         while read file; do
             [[ -d "${file}" ]] && cd "$file" && continue
@@ -49,7 +49,7 @@ function easy-clear-screen() {
 }
 
 zle -N easy-clear-screen
-# bindkey '`' easy-clear-screen
+bindkey '`' easy-clear-screen
 
 
 function __incremental_git() {
@@ -281,12 +281,7 @@ fzy-widget() {
             eval "exec {${(U)val}}>&-"
 
             (( key == 1 )) && (( #files )) && {
-                {
-                open \
-                  --only-files $files && \
-                swaymsg \
-                  -q -- '[app_id="^popup$"] move scratchpad'
-                } 2>&1 | \
+                open --only-files $files 2>&1 | \
                 while IFS= read -r file; do
                     if [[ -d "${file}" ]] ;then
                         cd "$file"
@@ -381,7 +376,12 @@ bindkey -e '^O' edit-command-line
 
 
 __register_con_id() {
-    [[ -z $SWAYSOCK ]] || export FILE_OPENER_CALLBACK="$(swaymsg -t get_tree | jq '.. | select(.type?) | select(.focused==true) | .id')"
+    if [[ -n $SWAYSOCK ]]; then
+        con_id="$(swaymsg -t get_tree | jq '.. | select(.type?) | select(.focused==true) | .id')"
+        app_id="$(swaymsg -t get_tree | jq -r '.. | select(.type?) | select(.focused==true) | .app_id')"
+        [[ $app_id == 'popup' ]] && export FILE_OPENER_PRE_CALLBACK="[con_id=$con_id] move scratchpad"
+        export FILE_OPENER_CALLBACK="$(swaymsg -t get_tree | jq '.. | select(.type?) | select(.focused==true) | .id')"
+    fi
     add-zsh-hook -d preexec __register_con_id
     unfunction __register_con_id
 }
