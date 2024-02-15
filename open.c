@@ -648,5 +648,15 @@ int main(int argc, char **argv) {
     }
 
     free(inputs);
+
+    const char *callback = NULL;
+    callback = getenv("FILE_OPENER_CALLBACK");
+    if (attach_mode && callback) {
+        char callbackmsg[128];
+        snprintf(callbackmsg, sizeof(callbackmsg), "[con_id=%s]", callback);
+        char *callbackargs[] = {callbackmsg, "focus", NULL};
+        run_sway(callbackargs);
+    }
+
     return disabled_count + error_return;
 }
