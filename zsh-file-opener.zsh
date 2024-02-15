@@ -238,6 +238,7 @@ fzy-widget() {
 
     integer keep_at_it=1
     while (( keep_at_it )); do
+        keep_at_it=0
 
         for key val in ${(kv)FDS}; do eval "exec {${(U)val}}>${(P)val}" ;done
 
@@ -252,8 +253,7 @@ fzy-widget() {
             --prompt="$(print -Pn ${(e)PROMPT})" \
             1>&${(P)${(U)${FDS[1]}}} \
             6>&${(P)${(U)${FDS[6]}}} \
-            9>&${(P)${(U)${FDS[9]}}} \
-            || keep_at_it=0
+            9>&${(P)${(U)${FDS[9]}}}
 
         for key val in ${(kv)FDS}; do
 
@@ -270,10 +270,8 @@ fzy-widget() {
                         ;;
                     9) # add to buffer
                         files+=(${line})
-                        keep_at_it=0
                         ;;
                     6) # wl-copy
-                        keep_at_it=0
                         files+=(${line})
                         ;;
                 esac
